@@ -54,17 +54,19 @@ class YoloDetector:
         return self._device
 
     def detect(self, frame: np.ndarray) -> list[Detection]:
+        options: dict[str, Any] = {
+            "conf": self._config.confidence,
+            "iou": self._config.iou,
+            "imgsz": self._config.image_size,
+            "classes": self._class_ids,
+            "device": self._device,
+            "verbose": False,
+        }
+        if self._half:
+            # Only passed when enabled: recent Ultralytics versions warn on any use.
+            options["half"] = True
         try:
-            results = self._model.predict(
-                frame,
-                conf=self._config.confidence,
-                iou=self._config.iou,
-                imgsz=self._config.image_size,
-                classes=self._class_ids,
-                device=self._device,
-                half=self._half,
-                verbose=False,
-            )
+            results = self._model.predict(frame, **options)
         except Exception as exc:  # the underlying library raises many exception types
             raise ModelError(f"Inference failed: {exc}") from exc
         if not results:

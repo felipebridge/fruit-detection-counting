@@ -66,7 +66,7 @@ def test_inference_settings_come_from_config() -> None:
     assert model.kwargs["imgsz"] == 320
     assert model.kwargs["device"] == "cpu"
     assert model.kwargs["classes"] == [46, 47, 49]  # fruit classes only, no "person"
-    assert model.kwargs["half"] is False  # half precision is disabled on CPU
+    assert "half" not in model.kwargs  # half precision is only used on CUDA
 
 
 def test_predictions_are_converted_to_detections() -> None:
