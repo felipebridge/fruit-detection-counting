@@ -155,6 +155,10 @@ class VideoPipeline:
     def unique_count(self) -> int:
         return self._counter.total
 
+    @property
+    def frames_processed(self) -> int:
+        return self._frames
+
     def summary(self) -> VideoSummary:
         frames = self._frames
         return VideoSummary(
