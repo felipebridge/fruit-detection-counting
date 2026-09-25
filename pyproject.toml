@@ -64,3 +64,8 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 disallow_untyped_defs = true
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Heavy third-party packages: treat as untyped instead of analysing them.
+module = ["ultralytics", "ultralytics.*", "torch", "torch.*", "cv2", "cv2.*"]
+follow_imports = "skip"
