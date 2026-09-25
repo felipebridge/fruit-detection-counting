@@ -19,3 +19,7 @@ class InputError(FruitCounterError):
 
 class ModelError(FruitCounterError):
     """The detection model could not be loaded or used."""
+
+
+class OutputError(FruitCounterError):
+    """Results could not be written."""

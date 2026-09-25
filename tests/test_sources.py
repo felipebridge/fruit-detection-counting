@@ -17,7 +17,7 @@ from fruit_counter.sources import (
 
 
 def write_video(path: Path, frames: int, fps: float = 10.0, size: tuple[int, int] = (64, 48)):
-    writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"MJPG"), fps, size)
+    writer = cv2.VideoWriter(str(path), cv2.VideoWriter.fourcc(*"MJPG"), fps, size)
     assert writer.isOpened()
     for i in range(frames):
         frame = np.full((size[1], size[0], 3), i * 10 % 255, dtype=np.uint8)
