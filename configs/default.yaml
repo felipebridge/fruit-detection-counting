@@ -1,0 +1,53 @@
+# Default configuration for Fruit Detection Counting.
+#
+# Every value can also be overridden with an environment variable
+# FRUIT_COUNTER_<SECTION>__<KEY> (e.g. FRUIT_COUNTER_MODEL__DEVICE=cpu)
+# or with the corresponding CLI flag. CLI flags take precedence.
+
+model:
+  # Path to YOLO weights. Official Ultralytics checkpoints (yolo11n.pt, yolo11s.pt, ...)
+  # are downloaded automatically. Point this to a custom fruit detector if you have one.
+  weights: models/yolo11n.pt
+  # "auto" picks cuda > mps > cpu. Explicit values: "cpu", "cuda:0", "mps".
+  device: auto
+  image_size: 640
+  # Detections below this confidence are discarded.
+  confidence: 0.25
+  # IoU threshold used by non-maximum suppression.
+  iou: 0.45
+  # Class names to keep. COCO only has these three fruit classes.
+  # Use an empty list ([]) to keep every class of a custom fruit-only model.
+  classes: [apple, banana, orange]
+  half: false
+
+tracking:
+  # Detections >= high_threshold can start new tracks; weaker ones only extend tracks.
+  high_threshold: 0.5
+  # Minimum IoU between a predicted track box and a detection to associate them.
+  match_iou: 0.3
+  # A track must be matched in this many consecutive frames before it is counted.
+  min_hits: 3
+  # Frames a confirmed track survives without detections (occlusion tolerance).
+  max_age: 30
+
+video:
+  # Process every N-th frame (1 = every frame).
+  frame_stride: 1
+  # Stop after N processed frames (null = whole video).
+  max_frames: null
+  log_every: 50
+
+visualization:
+  show_confidence: true
+  show_track_ids: true
+  show_summary: true
+  line_thickness: 2
+  font_scale: 0.6
+
+output:
+  directory: outputs
+  save_annotated: true
+  # Write a per-frame CSV for video / camera sources.
+  save_frame_stats: true
+  # FourCC used for annotated videos.
+  video_codec: mp4v
