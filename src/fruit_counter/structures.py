@@ -83,6 +83,18 @@ class Detection:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class TrackedDetection:
+    """A detection together with the identity assigned to it by the tracker.
+
+    ``track_id`` is ``None`` while the underlying track is still tentative (not yet
+    confirmed), or when the detection could not be associated with any track.
+    """
+
+    detection: Detection
+    track_id: int | None
+
+
 def iou_matrix(boxes_a: np.ndarray, boxes_b: np.ndarray) -> np.ndarray:
     """Pairwise IoU between two sets of ``xyxy`` boxes.
 
