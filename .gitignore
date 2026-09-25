@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Model weights (downloaded or trained, never committed)
+*.pt
+*.onnx
+*.engine
+models/*
+!models/README.md
+
+# Generated outputs
+outputs/
+runs/
+
+# Local data (only curated samples are versioned)
+data/*
+!data/samples/
+data/samples/*.mp4
+data/samples/*.avi
+
+# Secrets
+.env
+*.key
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
