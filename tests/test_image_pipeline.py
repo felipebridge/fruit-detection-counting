@@ -6,7 +6,7 @@ from fruit_counter.config import VisualizationConfig
 from fruit_counter.counting import count_by_class
 from fruit_counter.exceptions import InputError
 from fruit_counter.pipeline import ImagePipeline
-from fruit_counter.visualization import Annotator, color_for_class
+from fruit_counter.visualization import PALETTE, Annotator
 
 
 def test_count_by_class_groups_and_sorts() -> None:
@@ -66,17 +66,16 @@ def test_annotation_draws_boxes_without_mutating_input(blank_frame: np.ndarray) 
     assert annotated.shape == blank_frame.shape
     assert not blank_frame.any(), "input frame must not be modified"
     # The right edge of the box is drawn in the class colour.
-    assert tuple(annotated[100, 150]) == color_for_class(det.class_id)
+    assert tuple(annotated[100, 150]) == PALETTE[0]
     # The summary panel writes (anti-aliased) white text in the top-left corner.
     assert (annotated[:40, :200].min(axis=2) > 200).any()
 
 
 def test_unconfirmed_tracks_are_drawn_grey(blank_frame: np.ndarray) -> None:
     dets = [make_detection(50, 50, 100, 100), make_detection(200, 50, 250, 100)]
-    annotated = Annotator(VisualizationConfig(show_summary=False)).draw(
-        blank_frame, dets, track_ids=[7, None]
-    )
-    assert tuple(annotated[75, 100]) == color_for_class(dets[0].class_id)
+    annotator = Annotator(VisualizationConfig(show_summary=False))
+    annotated = annotator.draw(blank_frame, dets, track_ids=[7, None])
+    assert tuple(annotated[75, 100]) == annotator.color_for(dets[0].class_id)
     assert tuple(annotated[75, 250]) == (160, 160, 160)
 
 
@@ -91,3 +90,12 @@ def test_label_respects_visualization_config() -> None:
     minimal = Annotator(VisualizationConfig(show_confidence=False, show_track_ids=False))
     assert full._label(det, 3) == "#3 orange 0.88"
     assert minimal._label(det, 3) == "orange"
+
+
+def test_class_colours_are_distinct_and_stable() -> None:
+    annotator = Annotator()
+    # COCO ids of apple and orange: class_id % len(PALETTE) would nearly collide.
+    first, second = annotator.color_for(47), annotator.color_for(49)
+    assert first != second
+    assert annotator.color_for(47) == first  # stable across frames
+    assert len({annotator.color_for(i) for i in range(len(PALETTE))}) == len(PALETTE)

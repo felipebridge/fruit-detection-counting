@@ -12,24 +12,20 @@ from fruit_counter.structures import Detection
 
 Color = tuple[int, int, int]
 
-# Distinct, colour-blind-friendly BGR colours (Okabe-Ito palette).
+# Colour-blind-friendly BGR colours (Okabe-Ito palette), ordered so that the first
+# classes of a run get the most contrasting colours.
 PALETTE: tuple[Color, ...] = (
-    (0, 159, 230),  # orange
-    (233, 180, 86),  # sky blue
-    (115, 158, 0),  # bluish green
-    (66, 228, 240),  # yellow
     (178, 114, 0),  # blue
-    (0, 94, 213),  # vermillion
+    (0, 159, 230),  # orange
+    (115, 158, 0),  # bluish green
     (167, 121, 204),  # reddish purple
+    (66, 228, 240),  # yellow
+    (233, 180, 86),  # sky blue
+    (0, 94, 213),  # vermillion
 )
 TENTATIVE_COLOR: Color = (160, 160, 160)
 _FONT = cv2.FONT_HERSHEY_SIMPLEX
 _REFERENCE_SIDE = 720  # images larger than this get proportionally thicker drawings
-
-
-def color_for_class(class_id: int) -> Color:
-    """Stable colour for a class id."""
-    return PALETTE[class_id % len(PALETTE)]
 
 
 class Annotator:
@@ -37,6 +33,19 @@ class Annotator:
 
     def __init__(self, config: VisualizationConfig | None = None) -> None:
         self._config = config or VisualizationConfig()
+        self._class_colors: dict[int, Color] = {}
+
+    def color_for(self, class_id: int) -> Color:
+        """Colour of a class, assigned in order of first appearance.
+
+        Using appearance order rather than ``class_id % len(PALETTE)`` guarantees
+        distinct colours for the first classes seen (COCO's apple and orange ids
+        would otherwise land on near-identical colours). Colours stay stable for the
+        lifetime of the annotator, i.e. across all frames of a run.
+        """
+        if class_id not in self._class_colors:
+            self._class_colors[class_id] = PALETTE[len(self._class_colors) % len(PALETTE)]
+        return self._class_colors[class_id]
 
     def draw(
         self,
@@ -65,7 +74,7 @@ class Annotator:
         for index, det in enumerate(detections):
             track_id = track_ids[index] if track_ids is not None else None
             unconfirmed = track_ids is not None and track_id is None
-            color = TENTATIVE_COLOR if unconfirmed else color_for_class(det.class_id)
+            color = TENTATIVE_COLOR if unconfirmed else self.color_for(det.class_id)
             x1, y1, x2, y2 = (round(c) for c in det.box.to_xyxy())
             cv2.rectangle(canvas, (x1, y1), (x2, y2), color, thickness, cv2.LINE_AA)
             self._draw_label(canvas, self._label(det, track_id), (x1, y1), color, font_scale)
