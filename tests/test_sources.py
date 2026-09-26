@@ -14,6 +14,7 @@ from fruit_counter.sources import (
     read_frames,
     read_image,
     resolve_source,
+    resolve_sources,
 )
 
 
@@ -126,3 +127,31 @@ def test_unreadable_video_raises_input_error(tmp_path: Path) -> None:
     fake.write_bytes(b"garbage")
     with pytest.raises(InputError, match="Cannot open"):
         open_video(resolve_source(fake))
+
+
+# ------------------------------------------------------------------ directories
+
+
+def test_directory_yields_each_video_and_its_images(tmp_path: Path) -> None:
+    write_video(tmp_path / "b.MOV", 2)
+    write_video(tmp_path / "a.mp4", 2)
+    cv2.imwrite(str(tmp_path / "still.jpg"), np.zeros((8, 8, 3), np.uint8))
+    (tmp_path / "notes.txt").write_text("ignored", encoding="utf-8")
+    (tmp_path / ".hidden.mp4").write_bytes(b"")
+
+    sources = resolve_sources(tmp_path)
+    assert [(s.kind, s.path.name if s.path else None) for s in sources] == [
+        (SourceKind.VIDEO, "a.mp4"),
+        (SourceKind.VIDEO, "b.MOV"),
+        (SourceKind.IMAGE_DIR, tmp_path.name),
+    ]
+
+
+def test_directory_without_media_is_rejected(tmp_path: Path) -> None:
+    (tmp_path / "notes.txt").write_text("ignored", encoding="utf-8")
+    with pytest.raises(InputError, match="no supported images or videos"):
+        resolve_sources(tmp_path)
+
+
+def test_single_file_resolves_to_one_source() -> None:
+    assert resolve_sources(SAMPLE_IMAGE) == [resolve_source(SAMPLE_IMAGE)]

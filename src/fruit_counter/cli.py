@@ -11,6 +11,7 @@ import dataclasses
 import logging
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
 from fruit_counter import __version__
@@ -19,7 +20,13 @@ from fruit_counter.detector import YoloDetector
 from fruit_counter.evaluation import check_coverage, load_ground_truth
 from fruit_counter.exceptions import ConfigError, FruitCounterError, InputError
 from fruit_counter.runner import FruitCountingRunner, RunReport
-from fruit_counter.sources import resolve_source
+from fruit_counter.sources import (
+    IMAGE_EXTENSIONS,
+    VIDEO_EXTENSIONS,
+    InputSource,
+    list_videos,
+    resolve_sources,
+)
 
 logger = logging.getLogger("fruit_counter.cli")
 
@@ -27,6 +34,9 @@ EXIT_OK = 0
 EXIT_FAILURE = 1
 EXIT_USAGE = 2
 EXIT_INTERRUPTED = 130
+
+# Processed when no --input is given: drop videos here and run `fruit-counter`.
+INBOX_DIR = Path("videos_to_processing")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -37,7 +47,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument(
-        "-i", "--input", help="image, directory of images, video file, or camera index (e.g. 0)"
+        "-i",
+        "--input",
+        help="image, video, camera index (e.g. 0), or a directory whose videos are processed "
+        f"one by one (default: {INBOX_DIR}/)",
     )
     parser.add_argument("-c", "--config", help="YAML configuration file")
     parser.add_argument("-o", "--output-dir", help="root directory for run outputs")
@@ -97,8 +110,6 @@ def overrides_from_args(args: argparse.Namespace) -> dict[str, dict[str, Any]]:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if not args.list_classes and not args.input:
-        parser.error("--input is required (or use --list-classes)")
 
     # Logs go to stderr so stdout only carries results.
     handler = logging.StreamHandler(sys.stderr)
@@ -116,13 +127,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             for class_id, name in sorted(detector.class_names.items()):
                 print(f"{class_id:>4}  {name}")
             return EXIT_OK
-        source = resolve_source(args.input)
+        sources = _input_sources(args.input)
         truth = None
         if args.ground_truth:
             truth = load_ground_truth(args.ground_truth)
-            check_coverage(source, truth)  # before the model is loaded
+            for source in sources:
+                check_coverage(source, truth)  # before the model is loaded
         runner = FruitCountingRunner(config, YoloDetector(config.model))
-        report = runner.run(source, args.show, truth)
+        if len(sources) == 1:
+            print(format_report(runner.run(sources[0], args.show, truth)))
+            return EXIT_OK
+        return _run_batch(runner, sources, args.show, truth)
     except (ConfigError, InputError) as exc:
         logger.error("%s", exc)
         return EXIT_USAGE
@@ -133,7 +148,49 @@ def main(argv: Sequence[str] | None = None) -> int:
         logger.warning("Interrupted")
         return EXIT_INTERRUPTED
 
-    print(format_report(report))
+
+def _input_sources(spec: str | None) -> list[InputSource]:
+    if spec:
+        return resolve_sources(spec)
+    if not INBOX_DIR.is_dir():
+        INBOX_DIR.mkdir(parents=True)
+        raise InputError(f"Created {INBOX_DIR}/. Put your videos there and run again.")
+    videos = list_videos(INBOX_DIR)
+    if not videos:
+        formats = ", ".join(sorted(VIDEO_EXTENSIONS))
+        raise InputError(f"No videos in {INBOX_DIR}/ (supported: {formats})")
+    supported = VIDEO_EXTENSIONS | IMAGE_EXTENSIONS
+    ignored = [
+        p.name
+        for p in sorted(INBOX_DIR.iterdir())
+        if p.is_file() and p.suffix.lower() not in supported and not p.name.startswith(".")
+    ]
+    if ignored:
+        logger.info("Ignoring unsupported file(s): %s", ", ".join(ignored))
+    logger.info("Found %d video(s) in %s/", len(videos), INBOX_DIR)
+    return resolve_sources(INBOX_DIR)
+
+
+def _run_batch(
+    runner: FruitCountingRunner,
+    sources: list[InputSource],
+    show: bool,
+    truth: dict[str, int] | None,
+) -> int:
+    """Process each source independently; one failure does not stop the others."""
+    failed = []
+    for number, source in enumerate(sources, start=1):
+        logger.info("[%d/%d] %s", number, len(sources), source)
+        try:
+            report = runner.run(source, show, truth)
+        except FruitCounterError as exc:
+            logger.error("%s: %s", source, exc)
+            failed.append(str(source))
+            continue
+        print(format_report(report), end="\n\n")
+    if failed:
+        logger.error("%d of %d input(s) failed: %s", len(failed), len(sources), ", ".join(failed))
+        return EXIT_FAILURE
     return EXIT_OK
 
 

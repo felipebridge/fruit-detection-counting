@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
+import cv2
 import numpy as np
 import pytest
 
@@ -46,3 +47,15 @@ class ScriptedDetector:
 @pytest.fixture
 def blank_frame() -> np.ndarray:
     return np.zeros((240, 320, 3), dtype=np.uint8)
+
+
+def write_video(
+    path: Path, frames: int, fps: float = 10.0, size: tuple[int, int] = (160, 120)
+) -> Path:
+    """A small MJPG test clip of uniform grey frames."""
+    writer = cv2.VideoWriter(str(path), cv2.VideoWriter.fourcc(*"MJPG"), fps, size)
+    assert writer.isOpened()
+    for _ in range(frames):
+        writer.write(np.full((size[1], size[0], 3), 40, dtype=np.uint8))
+    writer.release()
+    return path

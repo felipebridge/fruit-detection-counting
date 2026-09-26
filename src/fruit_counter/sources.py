@@ -71,9 +71,36 @@ def resolve_source(spec: str | Path) -> InputSource:
     raise InputError(f"Unsupported file type '{suffix}' for {path}. Supported: {supported}")
 
 
+def resolve_sources(spec: str | Path) -> list[InputSource]:
+    """Like :func:`resolve_source`, but a directory yields each of its videos separately.
+
+    Images in the directory are processed together as one image-directory source.
+    Other files are ignored.
+    """
+    path = Path(str(spec).strip())
+    if not path.is_dir():
+        return [resolve_source(spec)]
+    sources = [InputSource(SourceKind.VIDEO, path=video) for video in list_videos(path)]
+    if list_images(path):
+        sources.append(InputSource(SourceKind.IMAGE_DIR, path=path))
+    if not sources:
+        raise InputError(f"Directory contains no supported images or videos: {path}")
+    return sources
+
+
 def list_images(directory: Path) -> list[Path]:
+    return _list_files(directory, IMAGE_EXTENSIONS)
+
+
+def list_videos(directory: Path) -> list[Path]:
+    return _list_files(directory, VIDEO_EXTENSIONS)
+
+
+def _list_files(directory: Path, extensions: frozenset[str]) -> list[Path]:
     return sorted(
-        p for p in directory.iterdir() if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
+        p
+        for p in directory.iterdir()
+        if p.is_file() and p.suffix.lower() in extensions and not p.name.startswith(".")
     )
 
 

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import SAMPLE_IMAGE, ScriptedDetector, make_detection
+from conftest import SAMPLE_IMAGE, ScriptedDetector, make_detection, write_video
 from fruit_counter import cli
 from fruit_counter.config import ModelConfig
 from fruit_counter.exceptions import ModelError
@@ -63,10 +63,61 @@ def test_bare_classes_flag_keeps_all_classes(
     assert fake_detector[0].classes == ()
 
 
-def test_missing_input_argument_is_a_usage_error(tmp_path: Path) -> None:
-    with pytest.raises(SystemExit) as exc_info:
-        run_cli([], tmp_path)
-    assert exc_info.value.code == cli.EXIT_USAGE
+@pytest.fixture
+def inbox(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
+    path = tmp_path / "videos_to_processing"
+    monkeypatch.setattr(cli, "INBOX_DIR", path)
+    return path
+
+
+def test_without_input_the_inbox_is_created(
+    fake_detector: list[ModelConfig], inbox: Path, tmp_path: Path
+) -> None:
+    assert run_cli([], tmp_path) == cli.EXIT_USAGE
+    assert inbox.is_dir()
+    assert fake_detector == []
+
+
+def test_inbox_without_videos_is_a_usage_error(
+    fake_detector: list[ModelConfig], inbox: Path, tmp_path: Path
+) -> None:
+    inbox.mkdir()
+    (inbox / "notes.txt").write_text("not a video", encoding="utf-8")
+    assert run_cli([], tmp_path) == cli.EXIT_USAGE
+    assert fake_detector == []
+
+
+def test_inbox_videos_are_processed_one_by_one(
+    fake_detector: list[ModelConfig],
+    inbox: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    inbox.mkdir()
+    videos = [write_video(inbox / "a.avi", 4), write_video(inbox / "b.avi", 3)]
+    (inbox / "notes.txt").write_text("ignored", encoding="utf-8")
+    originals = [video.read_bytes() for video in videos]
+
+    assert run_cli([], tmp_path) == cli.EXIT_OK
+    assert len(fake_detector) == 1  # the model is loaded once
+    run_dirs = sorted((tmp_path / "out").iterdir())
+    assert [d.name.split("_")[0] for d in run_dirs] == ["a", "b"]
+    assert (run_dirs[0] / "a_annotated.mp4").is_file()
+    assert (run_dirs[1] / "b_annotated.mp4").is_file()
+    assert capsys.readouterr().out.count("Source:") == 2
+    assert [video.read_bytes() for video in videos] == originals  # inputs untouched
+
+
+def test_a_failing_video_does_not_stop_the_batch(
+    fake_detector: list[ModelConfig], inbox: Path, tmp_path: Path
+) -> None:
+    inbox.mkdir()
+    (inbox / "broken.mp4").write_bytes(b"not a video")
+    write_video(inbox / "good.avi", 3)
+
+    assert run_cli([], tmp_path) == cli.EXIT_FAILURE
+    (run_dir,) = (tmp_path / "out").iterdir()
+    assert run_dir.name.startswith("good_")
 
 
 @pytest.mark.parametrize(
