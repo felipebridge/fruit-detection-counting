@@ -40,6 +40,7 @@ from fruit_counter.sources import (
     read_frames,
     read_image,
 )
+from fruit_counter.video_output import VideoWriter, open_video_writer
 from fruit_counter.visualization import Annotator
 
 logger = logging.getLogger(__name__)
@@ -164,7 +165,8 @@ class FruitCountingRunner:
         pipeline = VideoPipeline(self._detector, cfg.tracking, self._annotator)
         csv_path = output_dir / "frames.csv"
         video_path = output_dir / f"{source.name}_annotated.mp4"
-        video_writer: cv2.VideoWriter | None = None
+        video_writer: VideoWriter | None = None
+        audio_from = source.path if source.kind is SourceKind.VIDEO else None
         interrupted = False
         started = time.perf_counter()
 
@@ -187,7 +189,9 @@ class FruitCountingRunner:
                         annotated = pipeline.annotate(image, result)
                         if cfg.output.save_annotated:
                             if video_writer is None:
-                                video_writer = open_video_writer(video_path, fps / stride, image)
+                                video_writer = open_video_writer(
+                                    video_path, fps / stride, image, audio_from
+                                )
                             video_writer.write(annotated)
                         if show:
                             try:
@@ -288,11 +292,3 @@ def write_image(path: Path, image: np.ndarray) -> Path:
     except OSError as exc:
         raise OutputError(f"Cannot write {path}: {exc}") from exc
     return path
-
-
-def open_video_writer(path: Path, fps: float, first_frame: np.ndarray) -> cv2.VideoWriter:
-    height, width = first_frame.shape[:2]
-    writer = cv2.VideoWriter(str(path), cv2.VideoWriter.fourcc(*"mp4v"), fps, (width, height))
-    if not writer.isOpened():
-        raise OutputError(f"Cannot open video writer for {path}")
-    return writer
