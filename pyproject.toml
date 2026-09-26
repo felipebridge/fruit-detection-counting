@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "fruit-detection-counting"
 version = "0.1.0"
-description = "Computer vision system for automated fruit detection and counting."
+description = "Fruit detection and counting in images and videos with YOLO."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "felipebridge" }]
-keywords = ["computer-vision", "object-detection", "object-tracking", "yolo", "counting"]
+keywords = ["computer-vision", "object-detection", "yolo", "fruit-counting"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Scientific/Engineering :: Image Recognition",
@@ -25,7 +25,6 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
-    "pytest-cov>=5.0",
     "ruff>=0.6",
     "mypy>=1.10",
     "types-PyYAML",
@@ -66,6 +65,5 @@ disallow_untyped_defs = true
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-# Heavy third-party packages: treat as untyped instead of analysing them.
 module = ["ultralytics", "ultralytics.*", "torch", "torch.*", "cv2", "cv2.*"]
 follow_imports = "skip"
