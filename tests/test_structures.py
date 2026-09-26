@@ -1,7 +1,6 @@
-import numpy as np
 import pytest
 
-from fruit_counter.structures import BoundingBox, Detection, iou_matrix
+from fruit_counter.structures import BoundingBox, Detection
 
 
 def test_box_geometry() -> None:
@@ -25,30 +24,6 @@ def test_from_cxcywh_round_trips() -> None:
 def test_invalid_boxes_are_rejected(coords: tuple[float, ...]) -> None:
     with pytest.raises(ValueError):
         BoundingBox(*coords)
-
-
-def test_iou_known_values() -> None:
-    a = BoundingBox(0, 0, 10, 10)
-    assert a.iou(a) == pytest.approx(1.0)
-    assert a.iou(BoundingBox(20, 20, 30, 30)) == 0.0
-    # Half overlap: intersection 50, union 150.
-    assert a.iou(BoundingBox(5, 0, 15, 10)) == pytest.approx(50 / 150)
-
-
-def test_iou_matrix_shape_and_values() -> None:
-    a = np.array([[0, 0, 10, 10], [100, 100, 110, 110]])
-    b = np.array([[0, 0, 10, 10], [5, 0, 15, 10], [200, 200, 210, 210]])
-    matrix = iou_matrix(a, b)
-    assert matrix.shape == (2, 3)
-    np.testing.assert_allclose(matrix[0], [1.0, 1 / 3, 0.0])
-    np.testing.assert_allclose(matrix[1], [0.0, 0.0, 0.0])
-
-
-def test_iou_matrix_handles_empty_inputs_and_degenerate_boxes() -> None:
-    assert iou_matrix(np.empty((0, 4)), np.array([[0, 0, 1, 1]])).shape == (0, 1)
-    assert iou_matrix(np.array([[0, 0, 1, 1]]), np.empty((0, 4))).shape == (1, 0)
-    zero_area = np.array([[5, 5, 5, 5]])
-    assert iou_matrix(zero_area, zero_area)[0, 0] == 0.0
 
 
 def test_clip_keeps_box_inside_image() -> None:

@@ -6,8 +6,6 @@ import math
 from dataclasses import dataclass
 from typing import Any
 
-import numpy as np
-
 
 @dataclass(frozen=True, slots=True)
 class BoundingBox:
@@ -53,9 +51,6 @@ class BoundingBox:
         cx, cy = self.center
         return (cx, cy, self.width, self.height)
 
-    def iou(self, other: BoundingBox) -> float:
-        return float(iou_matrix(np.array([self.to_xyxy()]), np.array([other.to_xyxy()]))[0, 0])
-
     def clip(self, width: int, height: int) -> BoundingBox:
         """Clip the box to an image of the given size."""
         x1 = min(max(self.x1, 0.0), width)
@@ -93,31 +88,3 @@ class TrackedDetection:
 
     detection: Detection
     track_id: int | None
-
-
-def iou_matrix(boxes_a: np.ndarray, boxes_b: np.ndarray) -> np.ndarray:
-    """Pairwise IoU between two sets of ``xyxy`` boxes.
-
-    Args:
-        boxes_a: Array of shape ``(N, 4)``.
-        boxes_b: Array of shape ``(M, 4)``.
-
-    Returns:
-        Array of shape ``(N, M)`` with values in ``[0, 1]``.
-    """
-    a = np.asarray(boxes_a, dtype=np.float64).reshape(-1, 4)
-    b = np.asarray(boxes_b, dtype=np.float64).reshape(-1, 4)
-    if len(a) == 0 or len(b) == 0:
-        return np.zeros((len(a), len(b)), dtype=np.float64)
-
-    top_left = np.maximum(a[:, None, :2], b[None, :, :2])
-    bottom_right = np.minimum(a[:, None, 2:], b[None, :, 2:])
-    wh = np.clip(bottom_right - top_left, 0.0, None)
-    intersection = wh[..., 0] * wh[..., 1]
-
-    area_a = (a[:, 2] - a[:, 0]) * (a[:, 3] - a[:, 1])
-    area_b = (b[:, 2] - b[:, 0]) * (b[:, 3] - b[:, 1])
-    union = area_a[:, None] + area_b[None, :] - intersection
-    with np.errstate(divide="ignore", invalid="ignore"):
-        iou = np.where(union > 0, intersection / union, 0.0)
-    return iou

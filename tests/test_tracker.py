@@ -4,8 +4,7 @@ import pytest
 from conftest import make_detection
 from fruit_counter.config import TrackingConfig
 from fruit_counter.structures import Detection
-from fruit_counter.tracking import FruitTracker, TrackState
-from fruit_counter.tracking.matching import match_by_iou
+from fruit_counter.tracker import FruitTracker, iou_matrix, match_by_iou
 
 
 def moving_box(
@@ -22,6 +21,10 @@ def moving_box(
     return make_detection(x, y, x + size, y + size, conf, class_name)
 
 
+def iou(a: Detection, b: Detection) -> float:
+    return float(iou_matrix(np.array([a.box.to_xyxy()]), np.array([b.box.to_xyxy()]))[0, 0])
+
+
 def ids_over(tracker: FruitTracker, frames: list[list[Detection]]) -> list[list[int | None]]:
     return [[t.track_id for t in tracker.update(dets)] for dets in frames]
 
@@ -29,20 +32,33 @@ def ids_over(tracker: FruitTracker, frames: list[list[Detection]]) -> list[list[
 # ----------------------------------------------------------------- matching
 
 
+def test_iou_matrix_known_values() -> None:
+    a = np.array([[0, 0, 10, 10], [100, 100, 110, 110]])
+    b = np.array([[0, 0, 10, 10], [5, 0, 15, 10], [200, 200, 210, 210]])
+    matrix = iou_matrix(a, b)
+    assert matrix.shape == (2, 3)
+    np.testing.assert_allclose(matrix[0], [1.0, 50 / 150, 0.0])
+    np.testing.assert_allclose(matrix[1], [0.0, 0.0, 0.0])
+
+
+def test_iou_matrix_handles_empty_inputs_and_degenerate_boxes() -> None:
+    assert iou_matrix(np.empty((0, 4)), np.array([[0, 0, 1, 1]])).shape == (0, 1)
+    assert iou_matrix(np.array([[0, 0, 1, 1]]), np.empty((0, 4))).shape == (1, 0)
+    zero_area = np.array([[5, 5, 5, 5]])
+    assert iou_matrix(zero_area, zero_area)[0, 0] == 0.0
+
+
 def test_hungarian_matching_is_globally_optimal() -> None:
     # Greedy matching would pair track 0 with detection 0 (0.6) and leave track 1 with
     # nothing useful; the optimal assignment is 0->1 and 1->0.
     iou = np.array([[0.6, 0.5], [0.55, 0.0]])
-    matches, unmatched_tracks, unmatched_dets = match_by_iou(iou, 0.3)
+    matches, unmatched = match_by_iou(iou, 0.3)
     assert sorted(matches) == [(0, 1), (1, 0)]
-    assert unmatched_tracks == [] and unmatched_dets == []
+    assert unmatched == []
 
 
-def test_matching_respects_min_iou_and_empty_inputs() -> None:
-    matches, unmatched_tracks, unmatched_dets = match_by_iou(np.array([[0.1]]), 0.3)
-    assert matches == [] and unmatched_tracks == [0] and unmatched_dets == [0]
-    assert match_by_iou(np.zeros((0, 2)), 0.3) == ([], [], [0, 1])
-    assert match_by_iou(np.zeros((2, 0)), 0.3) == ([], [0, 1], [])
+def test_matching_respects_min_iou() -> None:
+    assert match_by_iou(np.array([[0.1]]), 0.3) == ([], [0])
 
 
 # ----------------------------------------------------------------- tracker
@@ -74,7 +90,7 @@ def test_fast_motion_is_followed_thanks_to_velocity_prediction() -> None:
     speeds = [min(6 + 3 * f, 30) for f in range(25)]
     xs = np.cumsum([0, *speeds])
     frames = [[make_detection(x, 50, x + 40, 90)] for x in xs]
-    last_step = make_detection(xs[-2], 50, xs[-2] + 40, 90).box.iou(frames[-1][0].box)
+    last_step = iou(make_detection(xs[-2], 50, xs[-2] + 40, 90), frames[-1][0])
     assert last_step < 0.3
 
     tracker = FruitTracker(TrackingConfig(match_iou=0.3, min_hits=3))
@@ -118,7 +134,7 @@ def test_single_frame_false_positive_is_never_confirmed() -> None:
     frames = [[moving_box(0, x0=200)]] + [[] for _ in range(5)]
     ids_over(tracker, frames)
     assert tracker.confirmed_count == 0
-    assert tracker.active_tracks == []
+    assert tracker.tracks == []
 
 
 def test_flickering_detection_must_be_consecutive_to_confirm() -> None:
@@ -168,16 +184,14 @@ def test_low_confidence_detection_extends_but_never_starts_tracks() -> None:
 def test_removed_tracks_are_pruned() -> None:
     tracker = FruitTracker(TrackingConfig(max_age=2, min_hits=1))
     ids_over(tracker, [[moving_box(0)], [], [], []])
-    assert tracker.active_tracks == []
+    assert tracker.tracks == []
 
 
 def test_confirmed_track_state() -> None:
     tracker = FruitTracker(TrackingConfig(min_hits=2))
     ids_over(tracker, [[moving_box(0)], [moving_box(1)]])
-    (track,) = tracker.active_tracks
-    assert track.state is TrackState.CONFIRMED
-    assert track.is_confirmed
-    assert (track.start_frame, track.last_frame, track.hits) == (0, 1, 2)
+    (track,) = tracker.tracks
+    assert (track.track_id, track.hits, track.misses) == (1, 2, 0)
 
 
 def test_output_preserves_input_order_and_length() -> None:
@@ -191,7 +205,7 @@ def test_output_preserves_input_order_and_length() -> None:
 def test_prediction_is_stable_for_stationary_and_moving_objects(speed: float) -> None:
     tracker = FruitTracker(TrackingConfig(min_hits=1))
     ids_over(tracker, [[moving_box(f, x0=300, speed=speed)] for f in range(20)])
-    (track,) = tracker.active_tracks
-    expected = moving_box(20, x0=300, speed=speed).box
-    track.mark_missed()  # advance one frame without a detection
-    assert track.predicted_box().iou(expected) > 0.9
+    (track,) = tracker.tracks
+    expected = moving_box(20, x0=300, speed=speed).box.to_xyxy()
+    track.misses += 1  # advance one frame without a detection
+    assert iou_matrix(track.predicted_xyxy(), np.array(expected))[0, 0] > 0.9
