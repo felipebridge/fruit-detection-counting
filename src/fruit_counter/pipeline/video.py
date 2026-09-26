@@ -17,8 +17,7 @@ from fruit_counter.config import TrackingConfig
 from fruit_counter.counting import UniqueCounter
 from fruit_counter.detector import Detector
 from fruit_counter.preprocessing import ensure_bgr
-from fruit_counter.structures import TrackedDetection
-from fruit_counter.tracker import FruitTracker
+from fruit_counter.tracker import FruitTracker, TrackedDetection
 from fruit_counter.visualization import Annotator
 
 

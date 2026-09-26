@@ -2,8 +2,8 @@ import numpy as np
 
 from conftest import ScriptedDetector, make_detection
 from fruit_counter.config import TrackingConfig
+from fruit_counter.detector import Detection
 from fruit_counter.pipeline import VideoPipeline
-from fruit_counter.structures import Detection
 
 
 def fruit_passing(frames: int, y: float, class_name: str = "apple", start: int = 0):

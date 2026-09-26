@@ -9,9 +9,8 @@ from typing import Any
 import numpy as np
 
 from fruit_counter.counting import count_by_class
-from fruit_counter.detector import Detector
+from fruit_counter.detector import Detection, Detector
 from fruit_counter.preprocessing import ensure_bgr
-from fruit_counter.structures import Detection
 from fruit_counter.visualization import Annotator
 
 

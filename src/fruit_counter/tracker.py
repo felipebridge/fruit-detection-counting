@@ -17,14 +17,21 @@ A confirmed track survives ``max_age`` frames without matches to bridge occlusio
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 from fruit_counter.config import TrackingConfig
-from fruit_counter.structures import Detection, TrackedDetection
+from fruit_counter.detector import Detection
 
 VELOCITY_SMOOTHING = 0.5  # weight of the newest velocity measurement
+
+
+@dataclass(frozen=True, slots=True)
+class TrackedDetection:
+    detection: Detection
+    track_id: int | None  # None while the track is tentative
 
 
 def iou_matrix(boxes_a: np.ndarray, boxes_b: np.ndarray) -> np.ndarray:
@@ -60,7 +67,7 @@ class Track:
         self.track_id: int | None = None
         self.hits = 1
         self.misses = 0
-        self._state = _xyxy_to_cxcywh(detection.box.to_xyxy())
+        self._state = _xyxy_to_cxcywh(detection.box)
         self._velocity = np.zeros(4)
 
     def predicted_xyxy(self) -> np.ndarray:
@@ -69,7 +76,7 @@ class Track:
         return np.array([cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2])
 
     def update(self, detection: Detection) -> None:
-        measured = _xyxy_to_cxcywh(detection.box.to_xyxy())
+        measured = _xyxy_to_cxcywh(detection.box)
         velocity = (measured - self._state) / max(self.misses, 1)
         if self.hits > 1:
             velocity = VELOCITY_SMOOTHING * velocity + (1 - VELOCITY_SMOOTHING) * self._velocity
@@ -131,7 +138,7 @@ class FruitTracker:
         if not tracks or not indices:
             return tracks
         predicted = np.array([t.predicted_xyxy() for t in tracks])
-        boxes = np.array([detections[i].box.to_xyxy() for i in indices])
+        boxes = np.array([detections[i].box for i in indices])
         matches, unmatched = match_by_iou(iou_matrix(predicted, boxes), self._config.match_iou)
         for t, d in matches:
             tracks[t].update(detections[indices[d]])

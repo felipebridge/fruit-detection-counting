@@ -16,7 +16,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from fruit_counter.structures import Detection, TrackedDetection
+from fruit_counter.detector import Detection
+from fruit_counter.tracker import TrackedDetection
 
 
 def count_by_class(detections: Iterable[Detection]) -> dict[str, int]:

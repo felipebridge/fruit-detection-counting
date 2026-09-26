@@ -7,7 +7,7 @@ from collections.abc import Sequence
 import cv2
 import numpy as np
 
-from fruit_counter.structures import Detection
+from fruit_counter.detector import Detection
 
 Color = tuple[int, int, int]
 
@@ -75,7 +75,7 @@ class Annotator:
             track_id = track_ids[index] if track_ids is not None else None
             unconfirmed = track_ids is not None and track_id is None
             color = TENTATIVE_COLOR if unconfirmed else self.color_for(det.class_id)
-            x1, y1, x2, y2 = (round(c) for c in det.box.to_xyxy())
+            x1, y1, x2, y2 = (round(c) for c in det.box)
             cv2.rectangle(canvas, (x1, y1), (x2, y2), color, thickness, cv2.LINE_AA)
             label = f"{det.class_name} {det.confidence:.2f}"
             if track_id is not None:

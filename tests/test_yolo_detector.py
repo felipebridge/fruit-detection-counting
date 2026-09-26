@@ -17,7 +17,12 @@ import pytest
 
 from conftest import REPO_ROOT, SAMPLE_IMAGE
 from fruit_counter.config import ModelConfig
-from fruit_counter.detector import YoloDetector, boxes_to_detections, resolve_class_ids
+from fruit_counter.detector import (
+    Detection,
+    YoloDetector,
+    boxes_to_detections,
+    resolve_class_ids,
+)
 from fruit_counter.exceptions import ConfigError, ModelError
 
 COCO_SUBSET = {0: "person", 46: "banana", 47: "apple", 49: "orange"}
@@ -81,9 +86,19 @@ def test_predictions_are_converted_to_detections() -> None:
         np.zeros((100, 100, 3), np.uint8)
     )
     assert [d.class_name for d in detections] == ["apple", "orange"]
-    assert detections[0].box.to_xyxy() == (10, 20, 50, 80)
+    assert detections[0].box == (10, 20, 50, 80)
     assert detections[0].confidence == pytest.approx(0.9)
     assert detections[1].class_id == 49
+
+
+def test_detection_serialisation() -> None:
+    det = Detection((1.234, 2, 30.06, 40), 0.87654, 47, "apple")
+    assert det.to_dict() == {
+        "class_id": 47,
+        "class_name": "apple",
+        "confidence": 0.8765,
+        "box_xyxy": [1.2, 2.0, 30.1, 40.0],
+    }
 
 
 def test_empty_prediction_returns_no_detections() -> None:
@@ -137,5 +152,6 @@ def test_real_model_detects_fruit_in_sample_image() -> None:
     for det in detections:
         assert det.class_name in {"apple", "banana", "orange"}
         assert det.confidence >= 0.25
-        assert 0 <= det.box.x1 < det.box.x2 <= width + 1
-        assert 0 <= det.box.y1 < det.box.y2 <= height + 1
+        x1, y1, x2, y2 = det.box
+        assert 0 <= x1 < x2 <= width + 1
+        assert 0 <= y1 < y2 <= height + 1

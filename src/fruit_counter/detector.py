@@ -4,15 +4,31 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 import numpy as np
 
 from fruit_counter.config import ModelConfig
 from fruit_counter.exceptions import ConfigError, ModelError
-from fruit_counter.structures import BoundingBox, Detection
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class Detection:
+    box: tuple[float, float, float, float]  # x1, y1, x2, y2 in pixels
+    confidence: float
+    class_id: int
+    class_name: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "class_id": self.class_id,
+            "class_name": self.class_name,
+            "confidence": round(self.confidence, 4),
+            "box_xyxy": [round(c, 1) for c in self.box],
+        }
 
 
 class Detector(Protocol):
@@ -100,7 +116,7 @@ def boxes_to_detections(boxes: Any, class_names: Mapping[int, str]) -> list[Dete
         return []
     boxes = boxes.cpu().numpy()
     return [
-        Detection(BoundingBox(*xyxy), conf, int(cls), class_names.get(int(cls), str(int(cls))))
+        Detection(tuple(xyxy), conf, int(cls), class_names.get(int(cls), str(int(cls))))
         for xyxy, conf, cls in zip(
             boxes.xyxy.tolist(), boxes.conf.tolist(), boxes.cls.tolist(), strict=True
         )

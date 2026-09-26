@@ -3,7 +3,7 @@ import pytest
 
 from conftest import make_detection
 from fruit_counter.config import TrackingConfig
-from fruit_counter.structures import Detection
+from fruit_counter.detector import Detection
 from fruit_counter.tracker import FruitTracker, iou_matrix, match_by_iou
 
 
@@ -22,7 +22,7 @@ def moving_box(
 
 
 def iou(a: Detection, b: Detection) -> float:
-    return float(iou_matrix(np.array([a.box.to_xyxy()]), np.array([b.box.to_xyxy()]))[0, 0])
+    return float(iou_matrix(np.array([a.box]), np.array([b.box]))[0, 0])
 
 
 def ids_over(tracker: FruitTracker, frames: list[list[Detection]]) -> list[list[int | None]]:
@@ -206,6 +206,6 @@ def test_prediction_is_stable_for_stationary_and_moving_objects(speed: float) ->
     tracker = FruitTracker(TrackingConfig(min_hits=1))
     ids_over(tracker, [[moving_box(f, x0=300, speed=speed)] for f in range(20)])
     (track,) = tracker.tracks
-    expected = moving_box(20, x0=300, speed=speed).box.to_xyxy()
+    expected = moving_box(20, x0=300, speed=speed).box
     track.misses += 1  # advance one frame without a detection
     assert iou_matrix(track.predicted_xyxy(), np.array(expected))[0, 0] > 0.9

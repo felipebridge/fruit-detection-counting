@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from fruit_counter.structures import BoundingBox, Detection
+from fruit_counter.detector import Detection
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SAMPLE_IMAGE = REPO_ROOT / "data" / "samples" / "fruit_bowl.jpg"
@@ -24,7 +24,7 @@ def make_detection(
     class_name: str = "apple",
 ) -> Detection:
     class_id = {name: i for i, name in CLASS_NAMES.items()}[class_name]
-    return Detection(BoundingBox(x1, y1, x2, y2), confidence, class_id, class_name)
+    return Detection((x1, y1, x2, y2), confidence, class_id, class_name)
 
 
 class ScriptedDetector:

@@ -1,8 +1,7 @@
 from conftest import make_detection
 from fruit_counter.config import TrackingConfig
 from fruit_counter.counting import UniqueCounter
-from fruit_counter.structures import TrackedDetection
-from fruit_counter.tracker import FruitTracker
+from fruit_counter.tracker import FruitTracker, TrackedDetection
 
 
 def tracked(track_id: int | None, class_name: str = "apple", conf: float = 0.9):
