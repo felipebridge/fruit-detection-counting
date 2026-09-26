@@ -16,8 +16,8 @@ from fruit_counter.sources import resolve_source
 
 
 def make_config(tmp_path: Path, **sections: dict) -> AppConfig:
-    overrides = {"output": {"directory": str(tmp_path / "outputs")}, **sections}
-    return load_config(overrides=overrides)
+    output = {"directory": str(tmp_path / "outputs"), **sections.pop("output", {})}
+    return load_config(overrides={**sections, "output": output})
 
 
 def write_video(path: Path, frames: int, fps: float = 10.0) -> Path:
