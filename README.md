@@ -328,7 +328,7 @@ from fruit_counter import VideoPipeline, YoloDetector, load_config
 
 config = load_config()
 pipeline = VideoPipeline(YoloDetector(config.model), config.tracking)
-for frame in frames:                      # numpy BGR arrays from any source
+for frame in frames:  # numpy BGR arrays from any source
     result = pipeline.process_frame(frame)
     print(result.visible_count, result.unique_count)
 print(pipeline.summary().to_dict())
