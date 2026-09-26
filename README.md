@@ -2,11 +2,12 @@
 
 # Fruit Detection & Counting
 
-**Detect fruit in images and video with YOLO11, and count each one exactly once.**
+**Point a camera at fruit. Get a count where each fruit counts exactly once.**
 
+[![CI](https://github.com/felipebridge/fruit-detection-counting/actions/workflows/ci.yml/badge.svg)](https://github.com/felipebridge/fruit-detection-counting/actions/workflows/ci.yml)
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![Ultralytics YOLO11](https://img.shields.io/badge/Ultralytics-YOLO11-111F68)
-![OpenCV](https://img.shields.io/badge/OpenCV-4.8%2B-5C3EE8?logo=opencv&logoColor=white)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 <br>
 
@@ -14,40 +15,42 @@
 &nbsp;
 <img src="docs/assets/image_detection.jpg" height="280" alt="Fruit bowl with bounding boxes and a per-class count panel">
 
-<sub>Video: every fruit keeps one id and is counted once &nbsp;·&nbsp; Image: per-class count</sub>
-
 </div>
 
 <br>
 
+A detector tells you what is in a frame. Across a video, the same apple shows up in
+hundreds of frames. This project tracks every fruit, so the total is the number of
+fruit, not the number of detections.
+
 ## Features
 
-- Images, image folders, video files and webcams through one command
-- Unique counting in video: a fruit seen in 100 frames counts once, not 100 times
-- Annotated image or video, `summary.json` and per-frame `frames.csv`
-- Counting error against a ground-truth CSV (`--ground-truth`)
-- Any Ultralytics detector via `--weights`
+- **One command** for images, image folders, video files and webcams
+- **Unique counting**: each fruit keeps one track id for as long as it stays in view
+- **Ready-to-use outputs**: annotated media, `summary.json` and per-frame `frames.csv`
+- **Built-in evaluation**: counting error against your ground-truth CSV
+- **Bring your own model**: any Ultralytics detector through `--weights`
 
-## Installation
+## Quick Start
 
 ```bash
 git clone https://github.com/felipebridge/fruit-detection-counting.git
 cd fruit-detection-counting
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e .
+
+fruit-counter -i data/samples/fruit_bowl.jpg
 ```
 
-The YOLO11n weights (~5 MB) download on first run. For a GPU, install the matching
-[PyTorch build](https://pytorch.org/get-started/locally/) first.
+The YOLO11n weights (~5 MB) download automatically on first run.
 
 ## Usage
 
 ```bash
-fruit-counter -i data/samples/fruit_bowl.jpg        # image
-fruit-counter -i path/to/images/                    # folder
-fruit-counter -i 0 --show                           # webcam (q to stop)
+fruit-counter -i path/to/images/                  # folder of images
+fruit-counter -i orchard.mp4 --device cuda:0      # video, on a GPU
+fruit-counter -i 0 --show                         # webcam, live preview
 
-python scripts/make_demo_video.py                   # build the demo clip, then:
+python scripts/make_demo_video.py                 # build the sample clip, then:
 fruit-counter -i data/samples/fruit_bowl_pan.mp4
 ```
 
@@ -59,8 +62,11 @@ Unique fruits counted: 8
 Outputs: outputs/fruit_bowl_pan_20260926-133041
 ```
 
-Common flags: `--conf`, `--device cuda:0`, `--stride 2`, `--weights`, `--classes`.
-All settings live in [`configs/default.yaml`](configs/default.yaml); see `fruit-counter --help`.
+The default COCO model detects apples, bananas and oranges. For other fruit, pass your
+own weights with `--weights my_model.pt --classes ...`. All settings live in
+[`configs/default.yaml`](configs/default.yaml); run `fruit-counter --help` for every flag.
+
+From Python:
 
 ```python
 from fruit_counter import FruitCountingRunner, load_config, resolve_source
@@ -69,29 +75,24 @@ report = FruitCountingRunner(load_config()).run(resolve_source("orchard.mp4"))
 print(report.fruit_count, report.results["counts_by_class"])
 ```
 
-## How it works
+## How It Works
 
-1. **Detect** — YOLO with class-agnostic NMS, so one fruit is never boxed under two labels.
-2. **Track** — constant-velocity box prediction, matched to detections by IoU (Hungarian algorithm).
-3. **Count** — a track counts after `min_hits` consecutive matches and survives `max_age`
-   missed frames; its class is a confidence-weighted vote.
-
-On the sample clip, 657 per-frame detections collapse to 8 tracks, none counted twice
-(the bowl holds 9 fruits, labelled by hand).
-
-## Limitations
-
-- The default COCO model knows only **apple, banana and orange**; lemons and limes are
-  mislabelled or missed. For other fruit, train a detector and pass `--weights`.
-- A fruit that leaves the view longer than `max_age` is counted again on return.
-- A fruit that is never detected is never counted.
-
-## Development
-
-```bash
-pip install -e ".[dev]"
-pytest && ruff check . && mypy
+```text
+frame ─▶ Detect ─▶ Track ─▶ Count ─▶ annotated media + summary.json
 ```
 
-<sub>No license chosen yet. Detection uses [Ultralytics YOLO](https://github.com/ultralytics/ultralytics) (AGPL-3.0).
-Sample image is CC0 ([attribution](data/samples/ATTRIBUTION.md)).</sub>
+1. **Detect**: YOLO11 with class-agnostic NMS, so one fruit never gets two labels.
+2. **Track**: boxes move forward with a constant-velocity model and are matched to new
+   detections by IoU with the Hungarian algorithm.
+3. **Count**: a track counts once it has been confirmed over several frames. Its label is
+   a confidence-weighted vote over its lifetime.
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and checks.
+
+## License
+
+[MIT](LICENSE) © felipebridge. Detection is powered by
+[Ultralytics YOLO](https://github.com/ultralytics/ultralytics) (AGPL-3.0). The sample
+image is CC0 ([attribution](data/samples/ATTRIBUTION.md)).
