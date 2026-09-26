@@ -53,7 +53,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     io.add_argument("-c", "--config", help="YAML configuration file")
     io.add_argument("-o", "--output-dir", help="root directory for run outputs")
-    io.add_argument("--run-name", help="fixed run directory name (default: <input>_<time>)")
     io.add_argument(
         "--no-save-annotated",
         dest="save_annotated",
@@ -136,7 +135,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _list_classes(config)
         source = resolve_source(args.input)
         runner = FruitCountingRunner(config, build_detector(config.model))
-        report = runner.run(source, run_name=args.run_name, show=args.show)
+        report = runner.run(source, show=args.show)
     except (ConfigError, InputError) as exc:
         logger.error("%s", exc)
         return EXIT_USAGE

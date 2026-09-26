@@ -47,9 +47,10 @@ def test_single_image_run_writes_annotated_image_and_summary(tmp_path: Path) -> 
         make_detection(400, 400, 600, 600, 0.7, "apple"),
     ]
     runner = FruitCountingRunner(make_config(tmp_path), ScriptedDetector([detections]))
-    report = runner.run(resolve_source(SAMPLE_IMAGE), run_name="img")
+    report = runner.run(resolve_source(SAMPLE_IMAGE))
 
-    assert report.output_dir == tmp_path / "outputs" / "img"
+    assert report.output_dir.parent == tmp_path / "outputs"
+    assert report.output_dir.name.startswith("fruit_bowl_")
     assert report.fruit_count == 2
     assert report.files["annotated"].name == "fruit_bowl_annotated.jpg"
     annotated = cv2.imread(str(report.files["annotated"]))
@@ -72,7 +73,7 @@ def test_image_directory_aggregates_and_skips_broken_files(tmp_path: Path) -> No
 
     script = [[make_detection(0, 0, 50, 50)], [make_detection(0, 0, 50, 50, class_name="banana")]]
     runner = FruitCountingRunner(make_config(tmp_path), ScriptedDetector(script))
-    report = runner.run(resolve_source(images), run_name="dir")
+    report = runner.run(resolve_source(images))
 
     assert report.fruit_count == 2
     assert report.results["counts_by_class"] == {"apple": 1, "banana": 1}
@@ -94,14 +95,24 @@ def test_failed_runs_leave_no_empty_output_directory(tmp_path: Path) -> None:
 
     for source in (broken_image, broken_video):
         with pytest.raises(InputError):
-            runner.run(resolve_source(source), run_name="failed")
-        assert not (tmp_path / "outputs" / "failed").exists()
+            runner.run(resolve_source(source))
+    assert list((tmp_path / "outputs").iterdir()) == []
+
+
+def test_video_without_readable_frames_leaves_no_output(tmp_path: Path) -> None:
+    video = write_video(tmp_path / "empty.avi", frames=0)
+    runner = FruitCountingRunner(make_config(tmp_path), ScriptedDetector([]))
+    if not cv2.VideoCapture(str(video)).isOpened():
+        pytest.skip("this OpenCV build cannot open an empty video")
+    with pytest.raises(InputError, match="No frames"):
+        runner.run(resolve_source(video))
+    assert list((tmp_path / "outputs").iterdir()) == []
 
 
 def test_video_run_counts_unique_fruits_and_writes_all_outputs(tmp_path: Path) -> None:
     video = write_video(tmp_path / "orchard.avi", frames=30, fps=10)
     runner = FruitCountingRunner(make_config(tmp_path), ScriptedDetector(two_fruits_script(30)))
-    report = runner.run(resolve_source(video), run_name="vid")
+    report = runner.run(resolve_source(video))
 
     results = report.results
     assert report.fruit_count == 2
@@ -131,7 +142,7 @@ def test_video_stride_and_max_frames_are_applied(tmp_path: Path) -> None:
     video = write_video(tmp_path / "clip.avi", frames=30, fps=10)
     config = make_config(tmp_path, video={"frame_stride": 2, "max_frames": 5})
     detector = ScriptedDetector([[] for _ in range(30)])
-    report = FruitCountingRunner(config, detector).run(resolve_source(video), run_name="s")
+    report = FruitCountingRunner(config, detector).run(resolve_source(video))
 
     assert detector.calls == 5
     assert report.results["frames_processed"] == 5

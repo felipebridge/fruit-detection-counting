@@ -31,12 +31,13 @@ def run_cli(args: list[str], tmp_path: Path) -> int:
 def test_image_run_prints_human_summary(
     fake_detector: list[ModelConfig], tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    code = run_cli(["--input", str(SAMPLE_IMAGE), "--run-name", "demo"], tmp_path)
+    code = run_cli(["--input", str(SAMPLE_IMAGE)], tmp_path)
     out = capsys.readouterr().out
     assert code == cli.EXIT_OK
     assert "Fruits detected: 1" in out
     assert "orange: 1" in out
-    assert (tmp_path / "out" / "demo" / "summary.json").is_file()
+    (run_dir,) = (tmp_path / "out").iterdir()
+    assert (run_dir / "summary.json").is_file()
 
 
 def test_json_output_is_machine_readable(

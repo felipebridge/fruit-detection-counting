@@ -1,35 +1,35 @@
-"""Application layer: wires input sources, pipelines and output writers together.
+"""Runs detection and counting on an input source and writes the results.
 
-The CLI is a thin wrapper around :class:`FruitCountingRunner`; the same class can be
-used from notebooks, batch jobs or a web service.
+Each run gets its own directory::
+
+    outputs/<source>_<YYYYmmdd-HHMMSS>/
+        summary.json              counts, detections or per-fruit statistics, config
+        <name>_annotated.<ext>    annotated image(s) or video
+        frames.csv                per-frame statistics (video / camera only)
 """
 
 from __future__ import annotations
 
+import csv
+import json
 import logging
+import re
+import shutil
 import time
 from collections import Counter
-from contextlib import ExitStack, suppress
+from contextlib import suppress
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import cv2
 import numpy as np
 
-from fruit_counter import __version__
 from fruit_counter.config import AppConfig
 from fruit_counter.detector import Detector, YoloDetector
-from fruit_counter.exceptions import InputError
-from fruit_counter.outputs import (
-    CsvStreamWriter,
-    VideoFileWriter,
-    create_run_dir,
-    write_image,
-    write_json,
-)
-from fruit_counter.pipeline import FrameResult, ImagePipeline, VideoPipeline
+from fruit_counter.exceptions import InputError, OutputError
+from fruit_counter.pipeline import ImagePipeline, VideoPipeline
 from fruit_counter.sources import (
     InputSource,
     SourceKind,
@@ -42,15 +42,12 @@ from fruit_counter.visualization import Annotator
 
 logger = logging.getLogger(__name__)
 
-SUMMARY_FILE = "summary.json"
-FRAMES_FILE = "frames.csv"
 LOG_EVERY = 50
+WINDOW_NAME = "Fruit counter"
 
 
 @dataclass(frozen=True)
 class RunReport:
-    """What a run produced."""
-
     source: InputSource
     output_dir: Path
     results: dict[str, Any]
@@ -58,87 +55,43 @@ class RunReport:
 
     @property
     def fruit_count(self) -> int:
-        """Headline number: fruits in the image(s), or unique fruits in the stream."""
-        key = "unique_fruit_count" if self.source.is_stream else "fruit_count"
-        return int(self.results[key])
-
-
-class LivePreview:
-    """Optional OpenCV window; degrades gracefully on headless systems."""
-
-    WINDOW_NAME = "Fruit Detection Counting"
-
-    def __init__(self) -> None:
-        self.stop_requested = False
-        self._available = True
-        self._opened = False
-
-    def show(self, frame: np.ndarray) -> None:
-        if not self._available:
-            return
-        try:
-            cv2.imshow(self.WINDOW_NAME, frame)
-            self._opened = True
-            key = cv2.waitKey(1) & 0xFF
-        except cv2.error as exc:
-            logger.warning("Live preview unavailable (%s); continuing without it", exc)
-            self._available = False
-            return
-        if key in (ord("q"), 27):  # q or Esc
-            self.stop_requested = True
-
-    def close(self) -> None:
-        if self._opened:
-            with suppress(cv2.error):
-                cv2.destroyWindow(self.WINDOW_NAME)
+        """Fruits in the image(s), or unique fruits in the stream."""
+        return int(self.results["unique_fruit_count" if self.source.is_stream else "fruit_count"])
 
 
 class FruitCountingRunner:
-    """Runs detection and counting on an :class:`InputSource` and saves the results.
-
-    Args:
-        config: Application configuration.
-        detector: Optional detector instance; a :class:`YoloDetector` is built from
-            ``config.model`` when omitted.
-    """
-
     def __init__(self, config: AppConfig, detector: Detector | None = None) -> None:
         self._config = config
         self._detector = detector if detector is not None else YoloDetector(config.model)
         self._annotator = Annotator()
 
-    def run(
-        self, source: InputSource, run_name: str | None = None, show: bool = False
-    ) -> RunReport:
-        """Process ``source`` and write all artefacts to a new run directory.
-
-        Args:
-            source: Validated input (see :func:`fruit_counter.sources.resolve_source`).
-            run_name: Fixed run directory name; defaults to ``<source>_<timestamp>``.
-            show: Display annotated frames live (video / camera only).
-        """
-        output_dir = create_run_dir(self._config.output.directory, source.name, run_name)
+    def run(self, source: InputSource, show: bool = False) -> RunReport:
+        """Process ``source``; ``show`` displays annotated video frames live."""
+        output_dir = create_run_dir(Path(self._config.output.directory), source.name)
         logger.info("Processing %s '%s'", source.kind.value, source)
         try:
             if source.is_stream:
-                report = self._run_stream(source, output_dir, show)
+                results, files = self._run_stream(source, output_dir, show)
             else:
-                assert source.path is not None
-                paths = (
-                    [source.path] if source.kind is SourceKind.IMAGE else list_images(source.path)
-                )
-                report = self._run_images(source, paths, output_dir)
+                results, files = self._run_images(source, output_dir)
+            summary = {
+                "source": {"kind": source.kind.value, "location": str(source)},
+                "config": self._config.to_dict(),
+                "results": results,
+            }
+            files["summary"] = write_json(output_dir / "summary.json", summary)
         except BaseException:
-            # Don't leave empty run directories behind (e.g. camera could not be opened).
-            if not any(output_dir.iterdir()):
-                output_dir.rmdir()
+            # The directory was created for this run, so only its partial output is lost.
+            shutil.rmtree(output_dir, ignore_errors=True)
             raise
         logger.info("Results written to %s", output_dir)
-        return report
+        return RunReport(source, output_dir, results, files)
 
-    # ------------------------------------------------------------------ images
-
-    def _run_images(self, source: InputSource, paths: list[Path], output_dir: Path) -> RunReport:
+    def _run_images(
+        self, source: InputSource, output_dir: Path
+    ) -> tuple[dict[str, Any], dict[str, Path]]:
+        assert source.path is not None
+        paths = [source.path] if source.kind is SourceKind.IMAGE else list_images(source.path)
         pipeline = ImagePipeline(self._detector, self._annotator)
         files: dict[str, Path] = {}
         entries: list[dict[str, Any]] = []
@@ -173,126 +126,146 @@ class FruitCountingRunner:
             )
 
         if source.kind is SourceKind.IMAGE:
-            results = entries[0]
-        else:
-            # Images are independent: the total is the sum of per-image counts.
-            results = {
-                "fruit_count": sum(e["fruit_count"] for e in entries),
-                "counts_by_class": dict(sorted(totals.items())),
-                "images_processed": len(entries),
-                "images_skipped": skipped,
-                "images": entries,
-            }
-        files["summary"] = write_json(output_dir / SUMMARY_FILE, self._envelope(source, results))
-        return RunReport(source, output_dir, results, files)
+            return entries[0], files
+        # Images are independent, so the total is the sum of per-image counts.
+        results = {
+            "fruit_count": sum(e["fruit_count"] for e in entries),
+            "counts_by_class": dict(sorted(totals.items())),
+            "images_processed": len(entries),
+            "images_skipped": skipped,
+            "images": entries,
+        }
+        return results, files
 
-    # ------------------------------------------------------------------ video / camera
-
-    def _run_stream(self, source: InputSource, output_dir: Path, show: bool) -> RunReport:
+    def _run_stream(
+        self, source: InputSource, output_dir: Path, show: bool
+    ) -> tuple[dict[str, Any], dict[str, Path]]:
         cfg = self._config
+        stride = cfg.video.frame_stride
         pipeline = VideoPipeline(self._detector, cfg.tracking, self._annotator)
-        preview = LivePreview() if show else None
+        csv_path = output_dir / "frames.csv"
+        video_path = output_dir / f"{source.name}_annotated.mp4"
+        video_writer: cv2.VideoWriter | None = None
         interrupted = False
         started = time.perf_counter()
 
-        with ExitStack() as stack:
-            capture, source_fps = open_video(source)
-            stack.callback(capture.release)
-            video_writer = stack.enter_context(
-                VideoFileWriter(
-                    output_dir / f"{source.name}_annotated.mp4",
-                    source_fps / cfg.video.frame_stride,
-                )
-            )
-            csv_writer = stack.enter_context(CsvStreamWriter(output_dir / FRAMES_FILE))
-            if preview is not None:
-                stack.callback(preview.close)
-
-            frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
-            expected = self._expected_frames(frame_count if frame_count > 0 else None)
-            logger.info("Stream @ %.2f fps, %s frame(s) to process", source_fps, expected or "?")
-            frames = read_frames(
-                capture,
-                source_fps,
-                cfg.video.frame_stride,
-                cfg.video.max_frames,
-                wall_clock=source.kind is SourceKind.CAMERA,
-            )
-            try:
+        capture, fps = open_video(source)
+        frames = read_frames(
+            capture, fps, stride, cfg.video.max_frames, wall_clock=source.kind is SourceKind.CAMERA
+        )
+        try:
+            with csv_path.open("w", newline="", encoding="utf-8") as csv_file:
+                csv_writer: csv.DictWriter[str] | None = None
                 for index, timestamp, image in frames:
                     result = pipeline.process_frame(image, index, timestamp)
-                    csv_writer.write(result.to_row())
-                    if cfg.output.save_annotated or preview is not None:
+                    row = result.to_row()
+                    if csv_writer is None:
+                        csv_writer = csv.DictWriter(csv_file, fieldnames=list(row))
+                        csv_writer.writeheader()
+                    csv_writer.writerow(row)
+
+                    if cfg.output.save_annotated or show:
                         annotated = pipeline.annotate(image, result)
                         if cfg.output.save_annotated:
+                            if video_writer is None:
+                                video_writer = open_video_writer(video_path, fps / stride, image)
                             video_writer.write(annotated)
-                        if preview is not None:
-                            preview.show(annotated)
-                            if preview.stop_requested:
-                                logger.info("Stopped by user")
-                                interrupted = True
-                                break
-                    self._log_progress(pipeline, result, expected, started)
-            except KeyboardInterrupt:
-                logger.warning("Interrupted; saving partial results")
-                interrupted = True
+                        if show:
+                            try:
+                                cv2.imshow(WINDOW_NAME, annotated)
+                                key = cv2.waitKey(1) & 0xFF
+                            except cv2.error as exc:
+                                logger.warning("Live preview unavailable: %s", exc)
+                                show = False
+                            else:
+                                if key in (ord("q"), 27):  # q or Esc
+                                    logger.info("Stopped by user")
+                                    interrupted = True
+                                    break
+
+                    processed = pipeline.frames_processed
+                    if processed % LOG_EVERY == 0:
+                        logger.info(
+                            "frame %d | visible %d | unique %d | %.1f fps",
+                            processed,
+                            result.visible_count,
+                            result.unique_count,
+                            processed / (time.perf_counter() - started),
+                        )
+        except KeyboardInterrupt:
+            logger.warning("Interrupted; saving partial results")
+            interrupted = True
+        finally:
+            capture.release()
+            if video_writer is not None:
+                video_writer.release()
+            if show:
+                with suppress(cv2.error):
+                    cv2.destroyWindow(WINDOW_NAME)
 
         summary = pipeline.summary()
         if summary["frames_processed"] == 0:
             raise InputError(f"No frames could be read from {source}")
         elapsed = time.perf_counter() - started
-        files: dict[str, Path] = {}
-        if video_writer.frames_written:
-            files["annotated"] = video_writer.path
-        if csv_writer.rows_written:
-            files["frame_stats"] = csv_writer.path
+        files = {"frame_stats": csv_path}
+        if video_writer is not None:
+            files["annotated"] = video_path
         results = {
             **summary,
-            "source_fps": round(source_fps, 3),
-            "frame_stride": cfg.video.frame_stride,
+            "source_fps": round(fps, 3),
+            "frame_stride": stride,
             "processing_time_s": round(elapsed, 2),
             "processing_fps": round(summary["frames_processed"] / elapsed, 2),
             "interrupted": interrupted,
         }
-        files["summary"] = write_json(output_dir / SUMMARY_FILE, self._envelope(source, results))
         logger.info(
             "Done: %d frame(s), %d unique fruit(s) %s",
             summary["frames_processed"],
             summary["unique_fruit_count"],
             summary["counts_by_class"],
         )
-        return RunReport(source, output_dir, results, files)
+        return results, files
 
-    def _expected_frames(self, frame_count: int | None) -> int | None:
-        max_frames = self._config.video.max_frames
-        if frame_count is None:
-            return max_frames
-        expected = -(-frame_count // self._config.video.frame_stride)  # ceil division
-        return min(expected, max_frames) if max_frames else expected
 
-    def _log_progress(
-        self, pipeline: VideoPipeline, result: FrameResult, expected: int | None, started: float
-    ) -> None:
-        processed = pipeline.frames_processed
-        if processed % LOG_EVERY:
-            return
-        fps = processed / max(time.perf_counter() - started, 1e-9)
-        logger.info(
-            "frame %d%s | visible %d | unique %d | %.1f fps",
-            processed,
-            f"/{expected}" if expected else "",
-            result.visible_count,
-            result.unique_count,
-            fps,
-        )
+def create_run_dir(root: Path, source_name: str) -> Path:
+    """Create ``root/<source_name>_<timestamp>``, with a numeric suffix on collision."""
+    safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", source_name).strip("._") or "run"
+    base = f"{safe_name}_{datetime.now():%Y%m%d-%H%M%S}"
+    path = root / base
+    suffix = 1
+    while path.exists():
+        suffix += 1
+        path = root / f"{base}-{suffix}"
+    try:
+        path.mkdir(parents=True)
+    except OSError as exc:
+        raise OutputError(f"Cannot create output directory {path}: {exc}") from exc
+    return path
 
-    # ------------------------------------------------------------------ metadata
 
-    def _envelope(self, source: InputSource, results: dict[str, Any]) -> dict[str, Any]:
-        return {
-            "tool": {"name": "fruit-detection-counting", "version": __version__},
-            "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            "source": {"kind": source.kind.value, "location": str(source)},
-            "config": self._config.to_dict(),
-            "results": results,
-        }
+def write_json(path: Path, data: dict[str, Any]) -> Path:
+    try:
+        path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    except (OSError, TypeError) as exc:
+        raise OutputError(f"Cannot write {path}: {exc}") from exc
+    return path
+
+
+def write_image(path: Path, image: np.ndarray) -> Path:
+    # imencode + tofile instead of cv2.imwrite, which fails on non-ASCII paths on Windows.
+    ok, encoded = cv2.imencode(path.suffix or ".jpg", image)
+    if not ok:
+        raise OutputError(f"Cannot encode image for {path}")
+    try:
+        encoded.tofile(path)
+    except OSError as exc:
+        raise OutputError(f"Cannot write {path}: {exc}") from exc
+    return path
+
+
+def open_video_writer(path: Path, fps: float, first_frame: np.ndarray) -> cv2.VideoWriter:
+    height, width = first_frame.shape[:2]
+    writer = cv2.VideoWriter(str(path), cv2.VideoWriter.fourcc(*"mp4v"), fps, (width, height))
+    if not writer.isOpened():
+        raise OutputError(f"Cannot open video writer for {path}")
+    return writer
