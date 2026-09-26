@@ -84,18 +84,18 @@ class FfmpegWriter:
         command += ["-pix_fmt", "yuv420p", "-movflags", "+faststart", str(path)]
         # A separate process group, so Ctrl+C stops the run but not the encoder,
         # which then finalises the partial video.
-        isolation: dict[str, object] = (
-            {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
-            if sys.platform == "win32"
-            else {"start_new_session": True}
-        )
+        if sys.platform == "win32":
+            creationflags, new_session = subprocess.CREATE_NEW_PROCESS_GROUP, False
+        else:
+            creationflags, new_session = 0, True
         try:
             self._process = subprocess.Popen(
                 command,
                 stdin=subprocess.PIPE,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
-                **isolation,  # type: ignore[call-overload]
+                creationflags=creationflags,
+                start_new_session=new_session,
             )
         except OSError as exc:
             raise OutputError(f"Cannot start ffmpeg for {path}: {exc}") from exc
