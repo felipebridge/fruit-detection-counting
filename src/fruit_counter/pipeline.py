@@ -14,7 +14,10 @@ from fruit_counter.counting import UniqueCounter, count_by_class
 from fruit_counter.detector import Detection, Detector
 from fruit_counter.exceptions import InputError
 from fruit_counter.tracker import FruitTracker, TrackedDetection
-from fruit_counter.visualization import Annotator
+from fruit_counter.visualization import Annotator, BoxSmoother, BoxStyle, draw_box
+
+# Processed frames over which a newly counted fruit's highlight fades out.
+HIGHLIGHT_FRAMES = 12
 
 
 def ensure_bgr(frame: np.ndarray) -> np.ndarray:
@@ -77,9 +80,10 @@ class ImagePipeline:
 
     def annotate(self, image: np.ndarray, result: ImageResult) -> np.ndarray:
         """Draw ``result`` on ``image``; BGR input is drawn on in place."""
-        summary = [f"Fruits detected: {result.fruit_count}"]
-        summary += [f"  {name}: {count}" for name, count in result.counts_by_class.items()]
-        return self._annotator.draw(ensure_bgr(image), result.detections, summary_lines=summary)
+        frame = self._annotator.draw(ensure_bgr(image), result.detections)
+        return self._annotator.draw_counter(
+            frame, "Fruits detected", result.fruit_count, result.counts_by_class
+        )
 
 
 @dataclass(frozen=True)
@@ -128,6 +132,8 @@ class VideoPipeline:
         self._visible_sum = 0
         self._max_visible = 0
         self._inference_ms_sum = 0.0
+        self._smoother = BoxSmoother()
+        self._counted_at: dict[int, int] = {}  # track id -> frames_processed when counted
 
     def process_frame(
         self, frame: np.ndarray, frame_index: int | None = None, timestamp_s: float = 0.0
@@ -145,20 +151,41 @@ class VideoPipeline:
         self._visible_sum += len(detections)
         self._max_visible = max(self._max_visible, len(detections))
         self._inference_ms_sum += inference_ms
+        for track_id in new_ids:
+            self._counted_at[track_id] = self.frames_processed
         return FrameResult(index, timestamp_s, tracked, self._counter.total, new_ids, inference_ms)
 
     def annotate(self, frame: np.ndarray, result: FrameResult) -> np.ndarray:
-        """Draw ``result`` on ``frame``; BGR input is drawn on in place."""
-        summary = [
-            f"Unique fruits counted: {result.unique_count}",
-            f"Visible now: {result.visible_count}",
-            f"Frame: {result.frame_index}",
-        ]
-        return self._annotator.draw(
-            ensure_bgr(frame),
-            [item.detection for item in result.tracked],
-            track_ids=[item.track_id for item in result.tracked],
-            summary_lines=summary,
+        """Draw ``result`` on ``frame``; BGR input is drawn on in place.
+
+        Call once per processed frame, in order: only counted fruits are drawn, with
+        boxes steadied across frames and labels from each track's class vote, so
+        neither boxes nor labels flicker. Tentative detections are not drawn.
+        """
+        image = ensure_bgr(frame)
+        observed = {
+            item.track_id: item.detection.box
+            for item in result.tracked
+            if item.track_id is not None
+        }
+        newest = 0.0
+        for track_id, box in sorted(self._smoother.update(observed).items()):
+            class_name = self._counter.class_of(track_id)
+            if class_name is None:
+                continue
+            age = self.frames_processed - self._counted_at.get(track_id, 0)
+            emphasis = max(0.0, 1 - age / HIGHLIGHT_FRAMES)
+            newest = max(newest, emphasis)
+            label = f"{class_name.capitalize()} #{track_id}"
+            style = BoxStyle(label, self._annotator.color_for(class_name), emphasis)
+            draw_box(image, box, style)
+        return self._annotator.draw_counter(
+            image,
+            "Fruits counted",
+            result.unique_count,
+            self._counter.counts_by_class,
+            footer=f"In view  {sum(1 for _ in observed)}",
+            highlight=newest,
         )
 
     def summary(self) -> dict[str, Any]:

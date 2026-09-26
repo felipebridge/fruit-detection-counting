@@ -5,7 +5,14 @@ from conftest import ScriptedDetector, make_detection
 from fruit_counter.counting import count_by_class
 from fruit_counter.exceptions import InputError
 from fruit_counter.pipeline import ImagePipeline
-from fruit_counter.visualization import PALETTE, Annotator
+from fruit_counter.visualization import FRUIT_COLORS, PALETTE, TENTATIVE_COLOR, Annotator
+
+APPLE = FRUIT_COLORS["apple"]
+
+
+def near(pixel: np.ndarray, color: tuple[int, int, int], tolerance: int = 40) -> bool:
+    """Anti-aliased edges are close to, not exactly, the drawing colour."""
+    return bool(np.abs(pixel.astype(int) - np.array(color)).max() <= tolerance)
 
 
 def test_count_by_class_groups_and_sorts() -> None:
@@ -50,11 +57,11 @@ def test_grayscale_input_is_accepted() -> None:
 
 
 def test_grayscale_input_is_annotated_in_colour() -> None:
-    gray = np.zeros((120, 160), dtype=np.uint8)
-    pipeline = ImagePipeline(ScriptedDetector([[make_detection(20, 20, 80, 80)]]))
+    gray = np.zeros((240, 320), dtype=np.uint8)
+    pipeline = ImagePipeline(ScriptedDetector([[make_detection(180, 120, 300, 220)]]))
     annotated = pipeline.annotate(gray, pipeline.process(gray))
-    assert annotated.shape == (120, 160, 3)
-    assert tuple(annotated[50, 80]) == PALETTE[0]
+    assert annotated.shape == (240, 320, 3)
+    assert near(annotated[170, 300], APPLE)
 
 
 def test_bgr_input_is_annotated_in_place(blank_frame: np.ndarray) -> None:
@@ -76,18 +83,18 @@ def test_annotation_draws_boxes_and_summary(blank_frame: np.ndarray) -> None:
     annotated = pipeline.annotate(blank_frame, result)
 
     assert annotated.shape == (240, 320, 3)
-    # The right edge of the box is drawn in the class colour.
-    assert tuple(annotated[100, 150]) == PALETTE[0]
-    # The summary panel writes (anti-aliased) white text in the top-left corner.
-    assert (annotated[:40, :200].min(axis=2) > 200).any()
+    # The right edge of the box is drawn in the fruit's colour.
+    assert near(annotated[100, 150], APPLE)
+    # The count card writes (anti-aliased) white text in the top-left corner.
+    assert (annotated[:100, :200].min(axis=2) > 200).any()
 
 
 def test_unconfirmed_tracks_are_drawn_grey(blank_frame: np.ndarray) -> None:
     dets = [make_detection(50, 50, 100, 100), make_detection(200, 50, 250, 100)]
     annotator = Annotator()
     annotated = annotator.draw(blank_frame, dets, track_ids=[7, None])
-    assert tuple(annotated[75, 100]) == annotator.color_for(dets[0].class_id)
-    assert tuple(annotated[75, 250]) == (160, 160, 160)
+    assert near(annotated[75, 100], annotator.color_for(dets[0].class_name))
+    assert near(annotated[75, 250], TENTATIVE_COLOR)
 
 
 def test_track_ids_length_must_match(blank_frame: np.ndarray) -> None:
@@ -102,3 +109,10 @@ def test_class_colours_are_distinct_and_stable() -> None:
     assert first != second
     assert annotator.color_for(47) == first  # stable across frames
     assert len({annotator.color_for(i) for i in range(len(PALETTE))}) == len(PALETTE)
+
+
+def test_known_fruits_have_fixed_colours() -> None:
+    annotator = Annotator()
+    assert annotator.color_for("orange") == FRUIT_COLORS["orange"]
+    assert annotator.color_for("Apple") == APPLE
+    assert annotator.color_for("kiwi") == PALETTE[0]  # others: order of first appearance

@@ -4,6 +4,7 @@ from conftest import ScriptedDetector, make_detection
 from fruit_counter.config import TrackingConfig
 from fruit_counter.detector import Detection
 from fruit_counter.pipeline import VideoPipeline
+from fruit_counter.visualization import FRUIT_COLORS, BoxSmoother
 
 
 def fruit_passing(frames: int, y: float, class_name: str = "apple", start: int = 0):
@@ -84,3 +85,33 @@ def test_annotated_frame_shows_confirmed_ids(blank_frame: np.ndarray) -> None:
     annotated = pipeline.annotate(blank_frame, result)
     assert annotated is blank_frame  # drawn in place
     assert annotated.any()
+
+
+def test_tentative_detections_are_not_drawn(blank_frame: np.ndarray) -> None:
+    script = build_script(fruit_passing(1, y=100), length=1)
+    pipeline = VideoPipeline(ScriptedDetector(script), TrackingConfig(min_hits=3))
+    result = pipeline.process_frame(blank_frame, 0)
+    annotated = pipeline.annotate(blank_frame, result)
+    assert not annotated[150:, :].any()  # nothing is drawn below the count card
+
+
+def test_counted_fruit_stays_drawn_through_a_missed_frame(blank_frame: np.ndarray) -> None:
+    script = build_script(fruit_passing(4, y=180), length=6)  # detected in frames 0-3 only
+    pipeline = VideoPipeline(ScriptedDetector(script), TrackingConfig(min_hits=3))
+    for i in range(5):
+        frame = blank_frame.copy()
+        annotated = pipeline.annotate(frame, pipeline.process_frame(frame, i))
+    # Frame 4 has no detection, yet the apple is still drawn near its last position.
+    apple = np.array(FRUIT_COLORS["apple"])
+    region = annotated[170:230, 10:90].reshape(-1, 3).astype(int)
+    assert (np.abs(region - apple).max(axis=1) < 40).any()
+
+
+def test_box_smoother_steadies_jitter_and_drops_lost_tracks() -> None:
+    smoother = BoxSmoother(alpha=0.5, hold_frames=2)
+    assert smoother.update({1: (0, 0, 10, 10)}) == {1: (0, 0, 10, 10)}
+    steadied = smoother.update({1: (4, 0, 14, 10)})[1]
+    assert 0 < steadied[0] < 4  # moves toward the detection, not all the way
+    assert 1 in smoother.update({})  # coasts through missed frames
+    assert 1 in smoother.update({})
+    assert smoother.update({}) == {}  # dropped after hold_frames misses

@@ -73,6 +73,11 @@ class UniqueCounter:
             obj.class_scores[item.detection.class_name] += item.detection.confidence
         return new_ids
 
+    def class_of(self, track_id: int) -> str | None:
+        """The voted class of a counted track, or ``None`` if it was never counted."""
+        obj = self._objects.get(track_id)
+        return obj.class_name if obj is not None else None
+
     @property
     def total(self) -> int:
         return len(self._objects)
