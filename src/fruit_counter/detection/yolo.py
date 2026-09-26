@@ -59,7 +59,9 @@ class YoloDetector:
             "iou": self._config.iou,
             "imgsz": self._config.image_size,
             "classes": self._class_ids,
-            "agnostic_nms": self._config.agnostic_nms,
+            # Class-agnostic NMS: otherwise one ambiguous fruit can yield both an
+            # "apple" and an "orange" box and be counted twice.
+            "agnostic_nms": True,
             "device": self._device,
             "verbose": False,
         }

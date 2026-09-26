@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 
 SUMMARY_FILE = "summary.json"
 FRAMES_FILE = "frames.csv"
+LOG_EVERY = 50
 
 
 @dataclass(frozen=True)
@@ -97,7 +98,7 @@ class FruitCountingRunner:
     def __init__(self, config: AppConfig, detector: Detector | None = None) -> None:
         self._config = config
         self._detector = detector if detector is not None else YoloDetector(config.model)
-        self._annotator = Annotator(config.visualization)
+        self._annotator = Annotator()
 
     def run(
         self, source: InputSource, run_name: str | None = None, show: bool = False
@@ -193,7 +194,6 @@ class FruitCountingRunner:
                 VideoFileWriter(
                     output_dir / f"{source.name}_annotated.mp4",
                     stream.fps / cfg.video.frame_stride,
-                    cfg.output.video_codec,
                 )
             )
             csv_writer = stack.enter_context(CsvStreamWriter(output_dir / FRAMES_FILE))
@@ -211,8 +211,7 @@ class FruitCountingRunner:
             try:
                 for frame in stream.frames(cfg.video.frame_stride, cfg.video.max_frames):
                     result = pipeline.process_frame(frame.image, frame.index, frame.timestamp_s)
-                    if cfg.output.save_frame_stats:
-                        csv_writer.write(result.to_row())
+                    csv_writer.write(result.to_row())
                     if cfg.output.save_annotated or preview is not None:
                         annotated = pipeline.annotate(frame.image, result)
                         if cfg.output.save_annotated:
@@ -266,7 +265,7 @@ class FruitCountingRunner:
         self, pipeline: VideoPipeline, result: FrameResult, expected: int | None, started: float
     ) -> None:
         processed = pipeline.frames_processed
-        if processed % self._config.video.log_every:
+        if processed % LOG_EVERY:
             return
         fps = processed / max(time.perf_counter() - started, 1e-9)
         logger.info(

@@ -61,13 +61,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="do not write annotated images/videos",
     )
-    io.add_argument(
-        "--no-frame-stats",
-        dest="save_frame_stats",
-        action="store_false",
-        default=None,
-        help="do not write per-frame CSV statistics",
-    )
 
     model = parser.add_argument_group("model")
     model.add_argument("-w", "--weights", help="path to YOLO weights")
@@ -120,7 +113,6 @@ def overrides_from_args(args: argparse.Namespace) -> dict[str, Any]:
         "output": {
             "directory": args.output_dir,
             "save_annotated": args.save_annotated,
-            "save_frame_stats": args.save_frame_stats,
         },
     }
 

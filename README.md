@@ -227,7 +227,7 @@ Outputs: outputs/fruit_bowl_pan_20260925-210557
 | `--stride`, `--max-frames` | Process every N-th frame / stop after N frames |
 | `--min-hits`, `--max-age` | Track confirmation and occlusion tolerance |
 | `--show` | Live preview window |
-| `--no-save-annotated`, `--no-frame-stats` | Skip annotated media / per-frame CSV |
+| `--no-save-annotated` | Skip annotated images / video |
 | `--json` | Print results as JSON on stdout (logs go to stderr) |
 | `--list-classes` | Print the model's classes and exit |
 | `--log-level` | `DEBUG`, `INFO` (default), `WARNING`, `ERROR` |
@@ -251,7 +251,6 @@ model:
   confidence: 0.25
   iou: 0.45
   classes: [apple, banana, orange]
-  agnostic_nms: true      # one box per object across classes (prevents double counts)
 tracking:
   high_threshold: 0.5
   match_iou: 0.3
@@ -450,9 +449,8 @@ includes model warm-up.
 - **Cold start on very fast motion:** a new track has no velocity estimate yet, so
   an object that moves most of its own width per frame when it first appears may
   not be linked. This is shared with Kalman-based trackers and is covered by a test.
-- **Video codec:** annotated videos use `mp4v` by default. Some browsers can't
-  play it inline; set `output.video_codec` (for example `avc1`, if your OpenCV
-  build supports it) or re-encode with ffmpeg.
+- **Video codec:** annotated videos use `mp4v`, which some browsers can't play
+  inline. Re-encode with ffmpeg if needed.
 
 ## Future work
 

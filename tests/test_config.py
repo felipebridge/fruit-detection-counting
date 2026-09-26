@@ -66,7 +66,6 @@ def test_none_overrides_are_ignored() -> None:
         ({"tracking": {"min_hits": 0}}, "tracking.min_hits"),
         ({"tracking": {"max_age": 0}}, "tracking.max_age"),
         ({"video": {"frame_stride": 0}}, "video.frame_stride"),
-        ({"output": {"video_codec": "h264x"}}, "FourCC"),
         ({"model": {"unknown_key": 1}}, "Unknown config key"),
         ({"not_a_section": {"a": 1}}, "Unknown config section"),
         ({"model": {"image_size": "large"}}, "Invalid value in 'model'"),

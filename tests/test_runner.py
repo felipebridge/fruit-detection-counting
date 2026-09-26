@@ -142,12 +142,12 @@ def test_video_stride_and_max_frames_are_applied(tmp_path: Path) -> None:
         assert [r["frame_index"] for r in csv.DictReader(f)] == ["0", "2", "4", "6", "8"]
 
 
-def test_outputs_can_be_disabled(tmp_path: Path) -> None:
+def test_annotated_video_can_be_disabled(tmp_path: Path) -> None:
     video = write_video(tmp_path / "clip.avi", frames=5)
-    config = make_config(tmp_path, output={"save_annotated": False, "save_frame_stats": False})
+    config = make_config(tmp_path, output={"save_annotated": False})
     report = FruitCountingRunner(config, ScriptedDetector([])).run(resolve_source(video))
-    assert set(report.files) == {"summary"}
-    assert [p.name for p in report.output_dir.iterdir()] == ["summary.json"]
+    assert set(report.files) == {"summary", "frame_stats"}
+    assert sorted(p.name for p in report.output_dir.iterdir()) == ["frames.csv", "summary.json"]
 
 
 def test_keyboard_interrupt_keeps_partial_results(tmp_path: Path) -> None:

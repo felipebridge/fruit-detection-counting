@@ -2,7 +2,6 @@ import numpy as np
 import pytest
 
 from conftest import ScriptedDetector, make_detection
-from fruit_counter.config import VisualizationConfig
 from fruit_counter.counting import count_by_class
 from fruit_counter.exceptions import InputError
 from fruit_counter.pipeline import ImagePipeline
@@ -73,7 +72,7 @@ def test_annotation_draws_boxes_without_mutating_input(blank_frame: np.ndarray) 
 
 def test_unconfirmed_tracks_are_drawn_grey(blank_frame: np.ndarray) -> None:
     dets = [make_detection(50, 50, 100, 100), make_detection(200, 50, 250, 100)]
-    annotator = Annotator(VisualizationConfig(show_summary=False))
+    annotator = Annotator()
     annotated = annotator.draw(blank_frame, dets, track_ids=[7, None])
     assert tuple(annotated[75, 100]) == annotator.color_for(dets[0].class_id)
     assert tuple(annotated[75, 250]) == (160, 160, 160)
@@ -82,14 +81,6 @@ def test_unconfirmed_tracks_are_drawn_grey(blank_frame: np.ndarray) -> None:
 def test_track_ids_length_must_match(blank_frame: np.ndarray) -> None:
     with pytest.raises(ValueError, match="same length"):
         Annotator().draw(blank_frame, [make_detection(0, 0, 5, 5)], track_ids=[])
-
-
-def test_label_respects_visualization_config() -> None:
-    det = make_detection(0, 0, 5, 5, 0.876, "orange")
-    full = Annotator(VisualizationConfig())
-    minimal = Annotator(VisualizationConfig(show_confidence=False, show_track_ids=False))
-    assert full._label(det, 3) == "#3 orange 0.88"
-    assert minimal._label(det, 3) == "orange"
 
 
 def test_class_colours_are_distinct_and_stable() -> None:

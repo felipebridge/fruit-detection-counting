@@ -12,7 +12,7 @@ import yaml
 
 from fruit_counter.exceptions import ConfigError
 
-# COCO classes that are fruits. The default YOLO checkpoints are trained on COCO.
+# The only fruit classes in COCO, which the default YOLO checkpoints are trained on.
 COCO_FRUIT_CLASSES: tuple[str, ...] = ("apple", "banana", "orange")
 
 
@@ -28,20 +28,13 @@ def _check_positive(name: str, value: int) -> None:
 
 @dataclass(frozen=True)
 class ModelConfig:
-    """Detector settings."""
-
     weights: str = "models/yolo11n.pt"
     device: str = "auto"
     image_size: int = 640
     confidence: float = 0.25
     iou: float = 0.45
-    # Class names to keep. An empty tuple keeps every class the model predicts,
-    # which is the right choice for a custom, fruit-only model.
+    # Empty keeps every class the model predicts (for a fruit-only custom model).
     classes: tuple[str, ...] = COCO_FRUIT_CLASSES
-    # Suppress overlapping boxes across classes. Essential for counting: with per-class
-    # NMS an ambiguous fruit can yield both an "apple" and an "orange" box, which
-    # would be counted as two objects.
-    agnostic_nms: bool = True
     half: bool = False
 
     def __post_init__(self) -> None:
@@ -60,14 +53,10 @@ class ModelConfig:
 
 @dataclass(frozen=True)
 class TrackingConfig:
-    """Multi-object tracker settings (used for video and camera sources)."""
-
-    # Detections at or above this confidence can start new tracks; weaker ones can
-    # only extend existing tracks (ByteTrack-style two-stage association).
+    # Only detections at or above this confidence can start a new track.
     high_threshold: float = 0.5
-    # Minimum IoU between a predicted track box and a detection to associate them.
     match_iou: float = 0.3
-    # Consecutive matched frames before a track is confirmed (and counted).
+    # Consecutive matched frames before a track is confirmed and counted.
     min_hits: int = 3
     # Frames a confirmed track survives without a matching detection.
     max_age: int = 30
@@ -81,64 +70,30 @@ class TrackingConfig:
 
 @dataclass(frozen=True)
 class VideoConfig:
-    """Video / stream processing settings."""
-
-    # Process every N-th frame. Values > 1 trade accuracy for speed.
     frame_stride: int = 1
-    # Stop after this many processed frames (None = whole video).
     max_frames: int | None = None
-    # Log progress every N processed frames.
-    log_every: int = 50
 
     def __post_init__(self) -> None:
         _check_positive("video.frame_stride", self.frame_stride)
-        _check_positive("video.log_every", self.log_every)
         if self.max_frames is not None:
             _check_positive("video.max_frames", self.max_frames)
 
 
 @dataclass(frozen=True)
-class VisualizationConfig:
-    """Annotation rendering settings."""
-
-    show_confidence: bool = True
-    show_track_ids: bool = True
-    show_summary: bool = True
-    line_thickness: int = 2
-    font_scale: float = 0.6
-
-    def __post_init__(self) -> None:
-        _check_positive("visualization.line_thickness", self.line_thickness)
-        if self.font_scale <= 0:
-            raise ConfigError(f"visualization.font_scale must be > 0, got {self.font_scale}")
-
-
-@dataclass(frozen=True)
 class OutputConfig:
-    """Where and what to write."""
-
     directory: str = "outputs"
     save_annotated: bool = True
-    save_frame_stats: bool = True
-    video_codec: str = "mp4v"
 
     def __post_init__(self) -> None:
         if not self.directory:
             raise ConfigError("output.directory must not be empty")
-        if len(self.video_codec) != 4:
-            raise ConfigError(
-                f"output.video_codec must be a 4-character FourCC, got {self.video_codec!r}"
-            )
 
 
 @dataclass(frozen=True)
 class AppConfig:
-    """Root configuration object."""
-
     model: ModelConfig = field(default_factory=ModelConfig)
     tracking: TrackingConfig = field(default_factory=TrackingConfig)
     video: VideoConfig = field(default_factory=VideoConfig)
-    visualization: VisualizationConfig = field(default_factory=VisualizationConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
 
     def to_dict(self) -> dict[str, Any]:
@@ -151,7 +106,6 @@ _SECTIONS: dict[str, type] = {
     "model": ModelConfig,
     "tracking": TrackingConfig,
     "video": VideoConfig,
-    "visualization": VisualizationConfig,
     "output": OutputConfig,
 }
 _T = TypeVar("_T")

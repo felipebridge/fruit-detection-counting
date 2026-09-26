@@ -7,7 +7,6 @@ from collections.abc import Sequence
 import cv2
 import numpy as np
 
-from fruit_counter.config import VisualizationConfig
 from fruit_counter.structures import Detection
 
 Color = tuple[int, int, int]
@@ -26,13 +25,14 @@ PALETTE: tuple[Color, ...] = (
 TENTATIVE_COLOR: Color = (160, 160, 160)
 _FONT = cv2.FONT_HERSHEY_SIMPLEX
 _REFERENCE_SIDE = 720  # images larger than this get proportionally thicker drawings
+_LINE_THICKNESS = 2
+_FONT_SCALE = 0.6
 
 
 class Annotator:
     """Draws detections and summary panels onto copies of frames."""
 
-    def __init__(self, config: VisualizationConfig | None = None) -> None:
-        self._config = config or VisualizationConfig()
+    def __init__(self) -> None:
         self._class_colors: dict[int, Color] = {}
 
     def color_for(self, class_id: int) -> Color:
@@ -68,8 +68,8 @@ class Annotator:
 
         canvas = frame.copy()
         scale = max(1.0, min(canvas.shape[:2]) / _REFERENCE_SIDE)
-        thickness = max(1, round(self._config.line_thickness * scale))
-        font_scale = self._config.font_scale * scale
+        thickness = max(1, round(_LINE_THICKNESS * scale))
+        font_scale = _FONT_SCALE * scale
 
         for index, det in enumerate(detections):
             track_id = track_ids[index] if track_ids is not None else None
@@ -77,20 +77,14 @@ class Annotator:
             color = TENTATIVE_COLOR if unconfirmed else self.color_for(det.class_id)
             x1, y1, x2, y2 = (round(c) for c in det.box.to_xyxy())
             cv2.rectangle(canvas, (x1, y1), (x2, y2), color, thickness, cv2.LINE_AA)
-            self._draw_label(canvas, self._label(det, track_id), (x1, y1), color, font_scale)
+            label = f"{det.class_name} {det.confidence:.2f}"
+            if track_id is not None:
+                label = f"#{track_id} {label}"
+            self._draw_label(canvas, label, (x1, y1), color, font_scale)
 
-        if self._config.show_summary and summary_lines:
+        if summary_lines:
             self._draw_panel(canvas, summary_lines, font_scale)
         return canvas
-
-    def _label(self, det: Detection, track_id: int | None) -> str:
-        parts = []
-        if self._config.show_track_ids and track_id is not None:
-            parts.append(f"#{track_id}")
-        parts.append(det.class_name)
-        if self._config.show_confidence:
-            parts.append(f"{det.confidence:.2f}")
-        return " ".join(parts)
 
     @staticmethod
     def _draw_label(
