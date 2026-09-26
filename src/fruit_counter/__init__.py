@@ -15,7 +15,7 @@ For in-memory frames (e.g. behind a web service) use :class:`ImagePipeline` or
 __version__ = "0.1.0"
 
 from fruit_counter.config import AppConfig, load_config
-from fruit_counter.detection import Detector, YoloDetector
+from fruit_counter.detector import Detector, YoloDetector
 from fruit_counter.exceptions import FruitCounterError
 from fruit_counter.pipeline import ImagePipeline, VideoPipeline
 from fruit_counter.runner import FruitCountingRunner, RunReport

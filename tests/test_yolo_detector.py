@@ -17,8 +17,7 @@ import pytest
 
 from conftest import REPO_ROOT, SAMPLE_IMAGE
 from fruit_counter.config import ModelConfig
-from fruit_counter.detection import Detector, YoloDetector
-from fruit_counter.detection.yolo import boxes_to_detections, resolve_class_ids
+from fruit_counter.detector import YoloDetector, boxes_to_detections, resolve_class_ids
 from fruit_counter.exceptions import ConfigError, ModelError
 
 COCO_SUBSET = {0: "person", 46: "banana", 47: "apple", 49: "orange"}
@@ -45,15 +44,20 @@ class Boxes(SimpleNamespace):
     def __len__(self) -> int:
         return len(self.conf)
 
+    def cpu(self) -> Boxes:
+        return self
+
+    def numpy(self) -> Boxes:
+        return self
+
 
 def make_boxes(rows: list[tuple[float, float, float, float, float, int]]) -> Boxes:
     arr = np.array(rows, dtype=np.float32).reshape(-1, 6)
     return Boxes(xyxy=arr[:, :4], conf=arr[:, 4], cls=arr[:, 5])
 
 
-def test_detector_satisfies_protocol() -> None:
+def test_class_names_come_from_the_model() -> None:
     detector = YoloDetector(ModelConfig(device="cpu"), model=FakeYolo(make_boxes([])))
-    assert isinstance(detector, Detector)
     assert detector.class_names[47] == "apple"
 
 

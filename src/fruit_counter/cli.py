@@ -23,7 +23,7 @@ from typing import Any
 
 from fruit_counter import __version__
 from fruit_counter.config import AppConfig, ModelConfig, load_config
-from fruit_counter.detection import Detector, YoloDetector
+from fruit_counter.detector import Detector, YoloDetector
 from fruit_counter.exceptions import ConfigError, FruitCounterError, InputError
 from fruit_counter.logging_utils import configure_logging
 from fruit_counter.runner import FruitCountingRunner, RunReport

@@ -343,7 +343,7 @@ fruit-counter -i orchard.mp4 --weights models/my_fruit_model.pt --classes
 `--classes` with no names (or `classes: []` in YAML) keeps every class the model
 predicts. Use `--list-classes` to check a model's labels. Any other backend (ONNX
 Runtime, TensorRT, a remote service) can be integrated by implementing the two-member
-`Detector` protocol in `src/fruit_counter/detection/base.py`.
+`Detector` protocol in `src/fruit_counter/detector.py`.
 
 ## Architecture
 
@@ -361,9 +361,7 @@ fruit-detection-counting/
 │   ├── sources.py                # input resolution, image/video/camera reading
 │   ├── outputs.py                # run directories, JSON/CSV/image/video writers
 │   ├── preprocessing.py          # frame validation and normalisation
-│   ├── detection/
-│   │   ├── base.py               # Detector protocol (the extension point)
-│   │   └── yolo.py               # Ultralytics adapter
+│   ├── detector.py               # Detector protocol and Ultralytics YOLO adapter
 │   ├── tracking/
 │   │   ├── matching.py           # Hungarian assignment on IoU
 │   │   └── tracker.py            # motion prediction, association, track lifecycle
@@ -380,7 +378,7 @@ fruit-detection-counting/
 Design decisions:
 
 - **Layered and dependency-directed.** `cli` → `runner` → `pipeline` →
-  `detection` / `tracking` / `counting` → `structures`. Only `detection/yolo.py`
+  `detector` / `tracking` / `counting` → `structures`. Only `detector.py`
   imports Ultralytics, and it does so lazily, so importing the package does not
   load PyTorch.
 - **Pipelines are pure and in-memory.** They take numpy frames and return result

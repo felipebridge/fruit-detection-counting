@@ -20,7 +20,7 @@ import numpy as np
 
 from fruit_counter import __version__
 from fruit_counter.config import AppConfig
-from fruit_counter.detection import Detector, YoloDetector
+from fruit_counter.detector import Detector, YoloDetector
 from fruit_counter.exceptions import InputError
 from fruit_counter.outputs import (
     CsvStreamWriter,
