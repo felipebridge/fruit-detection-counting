@@ -25,9 +25,10 @@ fruit, not the number of detections.
 
 ## Features
 
-- **One command** for images, image folders, video files and webcams
+- **Drop-in workflow**: put videos in a folder, run one command, get finished demos
 - **Unique counting**: each fruit keeps one track id for as long as it stays in view
-- **Ready-to-use outputs**: annotated media, `summary.json` and per-frame `frames.csv`
+- **Share-ready video**: steady boxes, a live count, H.264 at the source resolution with audio
+- **Data too**: `summary.json` and per-frame `frames.csv` alongside every video
 - **Built-in evaluation**: counting error against your ground-truth CSV
 - **Bring your own model**: any Ultralytics detector through `--weights`
 
@@ -37,15 +38,23 @@ fruit, not the number of detections.
 git clone https://github.com/felipebridge/fruit-detection-counting.git
 cd fruit-detection-counting
 pip install -e .
-
-fruit-counter -i data/samples/fruit_bowl.jpg
 ```
 
-The YOLO11n weights (~5 MB) download automatically on first run.
+Put your videos in `videos_to_processing/` (created on first run), then run:
+
+```bash
+fruit-counter
+```
+
+Each video is processed on its own and saved to `outputs/<video>_<timestamp>/`. Your
+originals are never modified. The YOLO11n weights (~5 MB) download on first run.
+Install [ffmpeg](https://ffmpeg.org/download.html) for H.264 output with audio, which
+social platforms require.
 
 ## Usage
 
 ```bash
+fruit-counter -i data/samples/fruit_bowl.jpg      # one image
 fruit-counter -i path/to/images/                  # folder of images
 fruit-counter -i orchard.mp4 --device cuda:0      # video, on a GPU
 fruit-counter -i 0 --show                         # webcam, live preview
@@ -78,7 +87,7 @@ print(report.fruit_count, report.results["counts_by_class"])
 ## How It Works
 
 ```text
-frame ─▶ Detect ─▶ Track ─▶ Count ─▶ annotated media + summary.json
+frame ─▶ Detect ─▶ Track ─▶ Count ─▶ Render ─▶ H.264 video + summary.json
 ```
 
 1. **Detect**: YOLO11 with class-agnostic NMS, so one fruit never gets two labels.
@@ -86,6 +95,8 @@ frame ─▶ Detect ─▶ Track ─▶ Count ─▶ annotated media + summary.j
    detections by IoU with the Hungarian algorithm.
 3. **Count**: a track counts once it has been confirmed over several frames. Its label is
    a confidence-weighted vote over its lifetime.
+4. **Render**: only counted fruits are drawn, with smoothed boxes and voted labels, so the
+   overlay stays steady from frame to frame.
 
 ## Contributing
 
