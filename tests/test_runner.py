@@ -1,5 +1,3 @@
-"""Integration tests for the application layer (real files, scripted detector)."""
-
 from __future__ import annotations
 
 import csv

@@ -1,12 +1,7 @@
-"""Counting logic.
+"""Counting: fruits visible in one image, and distinct fruits across a video.
 
-Two different quantities are computed in this project and must not be confused:
-
-* **Detection count**: how many fruits are visible in a single frame/image. This is
-  what :func:`count_by_class` computes.
-* **Unique count**: how many *distinct* fruits have been observed across a video.
-  It requires identity association (tracking) and is computed by
-  :class:`UniqueCounter`: a fruit seen in 100 consecutive frames counts once.
+A fruit that stays in view for 100 frames is one fruit, so video counts come from
+confirmed tracker ids, not from summing per-frame detections.
 """
 
 from __future__ import annotations
@@ -21,15 +16,12 @@ from fruit_counter.tracker import TrackedDetection
 
 
 def count_by_class(detections: Iterable[Detection]) -> dict[str, int]:
-    """Number of detections per class name, sorted by class name."""
     counts = Counter(det.class_name for det in detections)
     return dict(sorted(counts.items()))
 
 
 @dataclass
 class CountedObject:
-    """Aggregated observations of one unique (tracked) fruit."""
-
     track_id: int
     first_frame: int
     last_frame: int
@@ -39,10 +31,8 @@ class CountedObject:
 
     @property
     def class_name(self) -> str:
-        """Class with the highest accumulated confidence over the object's lifetime.
-
-        Voting smooths out frames where the detector confuses similar classes.
-        """
+        # Confidence-weighted vote over the track's lifetime, which smooths out
+        # frames where the detector confuses similar classes (apple vs. orange).
         return max(sorted(self.class_scores), key=lambda name: self.class_scores[name])
 
     @property
@@ -61,21 +51,13 @@ class CountedObject:
 
 
 class UniqueCounter:
-    """Counts distinct objects from tracker output.
-
-    Only detections with a ``track_id`` (i.e. confirmed tracks) contribute. Each id
-    is counted exactly once no matter how many frames it appears in.
-    """
+    """Counts each confirmed track id once; unconfirmed detections are ignored."""
 
     def __init__(self) -> None:
         self._objects: dict[int, CountedObject] = {}
 
     def update(self, frame_index: int, tracked: Iterable[TrackedDetection]) -> list[int]:
-        """Record one frame of tracker output.
-
-        Returns:
-            The track ids counted for the first time in this frame.
-        """
+        """Record one frame of tracker output; returns the ids counted for the first time."""
         new_ids = []
         for item in tracked:
             if item.track_id is None:
