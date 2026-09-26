@@ -49,6 +49,19 @@ def test_grayscale_input_is_accepted() -> None:
     assert detector.calls == 1
 
 
+def test_grayscale_input_is_annotated_in_colour() -> None:
+    gray = np.zeros((120, 160), dtype=np.uint8)
+    pipeline = ImagePipeline(ScriptedDetector([[make_detection(20, 20, 80, 80)]]))
+    annotated = pipeline.annotate(gray, pipeline.process(gray))
+    assert annotated.shape == (120, 160, 3)
+    assert tuple(annotated[50, 80]) == PALETTE[0]
+
+
+def test_bgr_input_is_annotated_in_place(blank_frame: np.ndarray) -> None:
+    pipeline = ImagePipeline(ScriptedDetector([[make_detection(20, 20, 80, 80)]]))
+    assert pipeline.annotate(blank_frame, pipeline.process(blank_frame)) is blank_frame
+
+
 def test_invalid_input_is_rejected_before_inference() -> None:
     detector = ScriptedDetector([[]])
     with pytest.raises(InputError):

@@ -76,10 +76,10 @@ class ImagePipeline:
         return ImageResult(detections, width, height, elapsed_ms)
 
     def annotate(self, image: np.ndarray, result: ImageResult) -> np.ndarray:
-        """Draw ``result`` on a BGR ``image`` in place."""
+        """Draw ``result`` on ``image``; BGR input is drawn on in place."""
         summary = [f"Fruits detected: {result.fruit_count}"]
         summary += [f"  {name}: {count}" for name, count in result.counts_by_class.items()]
-        return self._annotator.draw(image, result.detections, summary_lines=summary)
+        return self._annotator.draw(ensure_bgr(image), result.detections, summary_lines=summary)
 
 
 @dataclass(frozen=True)
@@ -148,14 +148,14 @@ class VideoPipeline:
         return FrameResult(index, timestamp_s, tracked, self._counter.total, new_ids, inference_ms)
 
     def annotate(self, frame: np.ndarray, result: FrameResult) -> np.ndarray:
-        """Draw ``result`` on a BGR ``frame`` in place."""
+        """Draw ``result`` on ``frame``; BGR input is drawn on in place."""
         summary = [
             f"Unique fruits counted: {result.unique_count}",
             f"Visible now: {result.visible_count}",
             f"Frame: {result.frame_index}",
         ]
         return self._annotator.draw(
-            frame,
+            ensure_bgr(frame),
             [item.detection for item in result.tracked],
             track_ids=[item.track_id for item in result.tracked],
             summary_lines=summary,
