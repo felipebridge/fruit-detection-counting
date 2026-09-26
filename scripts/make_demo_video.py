@@ -2,8 +2,7 @@
 
 Fruits enter the view, stay visible for many frames and leave again, which is
 exactly the situation where naive per-frame counting overcounts. Because the video
-is derived from a single photo, the expected unique count is known: it should match
-the number of fruits detected in the full image.
+is derived from a single photo, the true unique count is the number of fruits in it.
 
 Usage:
     python scripts/make_demo_video.py
