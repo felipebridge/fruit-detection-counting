@@ -17,6 +17,7 @@ import re
 import shutil
 import time
 from collections import Counter
+from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -28,6 +29,7 @@ import numpy as np
 
 from fruit_counter.config import AppConfig
 from fruit_counter.detector import Detector, YoloDetector
+from fruit_counter.evaluation import check_coverage, evaluate_counts
 from fruit_counter.exceptions import InputError, OutputError
 from fruit_counter.pipeline import ImagePipeline, VideoPipeline
 from fruit_counter.sources import (
@@ -65,8 +67,19 @@ class FruitCountingRunner:
         self._detector = detector if detector is not None else YoloDetector(config.model)
         self._annotator = Annotator()
 
-    def run(self, source: InputSource, show: bool = False) -> RunReport:
-        """Process ``source``; ``show`` displays annotated video frames live."""
+    def run(
+        self,
+        source: InputSource,
+        show: bool = False,
+        ground_truth: Mapping[str, int] | None = None,
+    ) -> RunReport:
+        """Process ``source``.
+
+        ``show`` displays annotated video frames live. With ``ground_truth`` (true
+        count per file name), the counting error is added to the results.
+        """
+        if ground_truth is not None:
+            check_coverage(source, ground_truth)
         output_dir = create_run_dir(Path(self._config.output.directory), source.name)
         logger.info("Processing %s '%s'", source.kind.value, source)
         try:
@@ -74,6 +87,10 @@ class FruitCountingRunner:
                 results, files = self._run_stream(source, output_dir, show)
             else:
                 results, files = self._run_images(source, output_dir)
+            if ground_truth is not None:
+                results["evaluation"] = evaluate_counts(
+                    _counts_per_file(source, results), ground_truth
+                )
             summary = {
                 "source": {"kind": source.kind.value, "location": str(source)},
                 "config": self._config.to_dict(),
@@ -227,6 +244,14 @@ class FruitCountingRunner:
             summary["counts_by_class"],
         )
         return results, files
+
+
+def _counts_per_file(source: InputSource, results: dict[str, Any]) -> dict[str, int]:
+    if source.kind is SourceKind.IMAGE_DIR:
+        return {entry["file"]: entry["fruit_count"] for entry in results["images"]}
+    assert source.path is not None
+    count = results["unique_fruit_count" if source.is_stream else "fruit_count"]
+    return {source.path.name: count}
 
 
 def create_run_dir(root: Path, source_name: str) -> Path:

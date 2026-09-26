@@ -16,6 +16,7 @@ from typing import Any
 from fruit_counter import __version__
 from fruit_counter.config import load_config
 from fruit_counter.detector import YoloDetector
+from fruit_counter.evaluation import check_coverage, load_ground_truth
 from fruit_counter.exceptions import ConfigError, FruitCounterError, InputError
 from fruit_counter.runner import FruitCountingRunner, RunReport
 from fruit_counter.sources import resolve_source
@@ -65,7 +66,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-frames", type=int, help="stop after N processed frames")
     parser.add_argument("--min-hits", type=int, help="matches needed before a fruit is counted")
     parser.add_argument("--max-age", type=int, help="frames a lost track is kept alive")
-    parser.add_argument("--show", action="store_true", help="display annotated frames live")
+    parser.add_argument(
+        "--ground-truth",
+        metavar="CSV",
+        help="CSV with 'file' and 'count' columns; reports the counting error",
+    )
+    parser.add_argument("--show", action="store_true", help="display annotated video frames live")
     parser.add_argument("-q", "--quiet", action="store_true", help="only log warnings and errors")
     return parser
 
@@ -111,7 +117,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 print(f"{class_id:>4}  {name}")
             return EXIT_OK
         source = resolve_source(args.input)
-        report = FruitCountingRunner(config, YoloDetector(config.model)).run(source, args.show)
+        truth = None
+        if args.ground_truth:
+            truth = load_ground_truth(args.ground_truth)
+            check_coverage(source, truth)  # before the model is loaded
+        runner = FruitCountingRunner(config, YoloDetector(config.model))
+        report = runner.run(source, args.show, truth)
     except (ConfigError, InputError) as exc:
         logger.error("%s", exc)
         return EXIT_USAGE
@@ -143,5 +154,12 @@ def format_report(report: RunReport) -> str:
         if "images_processed" in results:
             lines.append(f"Images processed: {results['images_processed']}")
     lines += [f"  - {name}: {count}" for name, count in results["counts_by_class"].items()]
+    if "evaluation" in results:
+        ev = results["evaluation"]
+        lines.append(
+            f"Counting error over {ev['files_evaluated']} file(s): "
+            f"MAE {ev['mean_absolute_error']}, mean error {ev['mean_error']:+} "
+            f"(true {ev['total_true']}, predicted {ev['total_predicted']})"
+        )
     lines.append(f"Outputs: {report.output_dir}")
     return "\n".join(lines)

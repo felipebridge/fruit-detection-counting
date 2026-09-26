@@ -136,16 +136,36 @@ for frame in frames:  # BGR numpy arrays
 print(pipeline.summary()["unique_fruit_count"])
 ```
 
+## Measuring counting error
+
+Given the true counts, `--ground-truth` reports how far off the counts are. The CSV
+needs `file` and `count` columns, where `file` is the image or video file name:
+
+```csv
+file,count
+IMG_0001.jpg,14
+row3.mp4,212
+```
+
+```bash
+fruit-counter -i path/to/images/ --ground-truth counts.csv
+```
+
+`summary.json` then contains the error per file (predicted minus true), the mean
+absolute error and the mean error (negative means undercounting). Files without a
+ground-truth entry are listed and skipped. The input is checked against the CSV
+before the model is loaded.
+
 ## Example results
 
-Default configuration (YOLO11n, CPU) on the repository's sample data. These are
-single examples, not a benchmark: there is no labelled evaluation set, so no accuracy
-metrics are claimed.
+Default configuration (YOLO11n, CPU) on the sample data, evaluated with
+`data/samples/counts.csv`. The sample bowl has 9 fruits: 3 oranges, 1 apple, 2 lemons
+and 3 limes. This is one hand-labelled example, not a benchmark.
 
-| Input | Result |
-|---|---|
-| `fruit_bowl.jpg`: 9 fruits (3 oranges, 1 apple, 2 lemons, 3 limes) | 6 detected: the 3 oranges, the apple, and the 2 lemons labelled "apple". The limes are missed. |
-| `fruit_bowl_pan.mp4`: 150-frame pan over the same bowl | 8 unique fruits (5 apple, 3 orange) from 657 per-frame detections |
+| Input | Predicted | True | Notes |
+|---|---|---|---|
+| `fruit_bowl.jpg` | 6 | 9 | The 3 oranges and the apple are found, the 2 lemons are labelled "apple", and the 3 limes are missed. |
+| `fruit_bowl_pan.mp4` (150-frame pan) | 8 | 9 | 657 per-frame detections are reduced to 8 unique fruits (5 apple, 3 orange). |
 
 ## Limitations
 
