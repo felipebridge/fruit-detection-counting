@@ -189,7 +189,14 @@ and 3 limes. This is one hand-labelled example, not a benchmark.
 | Input | Predicted | True | Notes |
 |---|---|---|---|
 | `fruit_bowl.jpg` | 6 | 9 | The 3 oranges and the apple are found, the 2 lemons are labelled "apple", and the 3 limes are missed. |
-| `fruit_bowl_pan.mp4` (150-frame pan) | 8 | 9 | 657 per-frame detections are reduced to 8 unique fruits (5 apple, 3 orange). |
+| `fruit_bowl_pan.mp4` (150-frame pan) | 8 | 9 | 657 per-frame detections are reduced to 8 unique fruits. |
+
+In the video, checked frame by frame, each of the 8 tracks is a different fruit: the
+3 oranges, the apple, the 2 lemons and 2 of the limes. The lemons and limes are
+labelled "apple", so the class split (5 apple, 3 orange) is wrong even though no fruit
+is counted twice. The bottom lime is never detected. Two limes are found in the video
+but not in the still image because each crop shows the fruit larger at the same
+inference size.
 
 ## Limitations
 
