@@ -45,3 +45,6 @@ data/samples/*.avi
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Local videos to process (never committed)
+videos_to_processing/
