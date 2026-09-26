@@ -1,8 +1,4 @@
-# Default configuration for Fruit Detection Counting.
-#
-# Every value can also be overridden with an environment variable
-# FRUIT_COUNTER_<SECTION>__<KEY> (e.g. FRUIT_COUNTER_MODEL__DEVICE=cpu)
-# or with the corresponding CLI flag. CLI flags take precedence.
+# Default configuration. CLI flags override values from this file.
 
 model:
   # Path to YOLO weights. Official Ultralytics checkpoints (yolo11n.pt, yolo11s.pt, ...)

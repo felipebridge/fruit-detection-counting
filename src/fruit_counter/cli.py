@@ -41,8 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="fruit-counter",
         description="Detect and count fruits in images, videos and camera streams.",
-        epilog="Settings not given on the command line come from --config, "
-        "FRUIT_COUNTER_<SECTION>__<KEY> environment variables, or built-in defaults.",
+        epilog="Settings not given on the command line come from --config or built-in defaults.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 

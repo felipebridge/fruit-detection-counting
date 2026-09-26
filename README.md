@@ -59,8 +59,7 @@ multi-object tracking.
   (`--input 0`).
 - **Outputs:** annotated images and videos, `summary.json` with counts, per-object
   statistics and the exact configuration used, and a per-frame `frames.csv`.
-- **Layered configuration:** defaults, then YAML, then environment variables, then
-  CLI flags, validated at startup.
+- **Configuration:** defaults, then YAML, then CLI flags, validated at startup.
 - **Professional CLI** with a human-readable or `--json` summary, meaningful exit
   codes and optional live preview (`--show`).
 - **Detector-agnostic core:** the pipeline depends on a small `Detector` protocol,
@@ -243,8 +242,7 @@ Settings are resolved in this order (later wins):
 1. Defaults in `src/fruit_counter/config.py`
 2. A YAML file passed with `--config` (see [`configs/default.yaml`](configs/default.yaml),
    which documents every option)
-3. Environment variables `FRUIT_COUNTER_<SECTION>__<KEY>`
-4. CLI flags
+3. CLI flags
 
 ```yaml
 model:
@@ -261,13 +259,8 @@ tracking:
   max_age: 30
 ```
 
-```bash
-export FRUIT_COUNTER_MODEL__DEVICE=cpu
-export FRUIT_COUNTER_TRACKING__MAX_AGE=60
-```
-
 All values are validated when they are loaded. Unknown keys, out-of-range
-thresholds, image sizes that aren't multiples of 32, and malformed variables fail
+thresholds and image sizes that aren't multiples of 32 fail
 immediately with a clear message.
 
 ## Outputs
@@ -415,8 +408,7 @@ mypy
 
 What is tested:
 
-- **Configuration:** precedence, type coercion from environment variables, and
-  rejection of invalid values.
+- **Configuration:** precedence and rejection of invalid values.
 - **Tracker:** confirmation, 100-frame persistence with a single id, occlusion
   bridging, expiry and re-identification, false-positive suppression, low-confidence
   track extension, and a velocity-prediction scenario that fails without

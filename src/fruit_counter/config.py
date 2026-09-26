@@ -1,24 +1,8 @@
-"""Application configuration.
-
-Configuration is a tree of frozen dataclasses. Values are resolved with the following
-precedence (lowest to highest):
-
-1. Defaults defined in this module.
-2. A YAML file (see ``configs/default.yaml``).
-3. Environment variables named ``FRUIT_COUNTER_<SECTION>__<KEY>``,
-   e.g. ``FRUIT_COUNTER_MODEL__CONFIDENCE=0.4``.
-4. Explicit overrides (typically CLI flags), as a nested mapping.
-
-Every section validates itself on construction, so an invalid value fails fast with a
-:class:`~fruit_counter.exceptions.ConfigError` instead of deep inside the pipeline.
-"""
+"""Configuration: code defaults, overridden by an optional YAML file, then CLI flags."""
 
 from __future__ import annotations
 
 import dataclasses
-import os
-import types
-import typing
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -27,9 +11,6 @@ from typing import Any, TypeVar
 import yaml
 
 from fruit_counter.exceptions import ConfigError
-
-ENV_PREFIX = "FRUIT_COUNTER_"
-ENV_SECTION_SEPARATOR = "__"
 
 # COCO classes that are fruits. The default YOLO checkpoints are trained on COCO.
 COCO_FRUIT_CLASSES: tuple[str, ...] = ("apple", "banana", "orange")
@@ -66,6 +47,9 @@ class ModelConfig:
     def __post_init__(self) -> None:
         if not self.weights:
             raise ConfigError("model.weights must not be empty")
+        if isinstance(self.classes, str):
+            raise ConfigError("model.classes must be a list of class names")
+        object.__setattr__(self, "classes", tuple(self.classes))
         _check_unit_interval("model.confidence", self.confidence)
         _check_unit_interval("model.iou", self.iou)
         if self.image_size < 32 or self.image_size % 32:
@@ -158,39 +142,42 @@ class AppConfig:
     output: OutputConfig = field(default_factory=OutputConfig)
 
     def to_dict(self) -> dict[str, Any]:
-        """Return a plain, JSON/YAML-serialisable representation."""
         data = dataclasses.asdict(self)
         data["model"]["classes"] = list(self.model.classes)
         return data
 
 
-# --------------------------------------------------------------------------- loading
-
+_SECTIONS: dict[str, type] = {
+    "model": ModelConfig,
+    "tracking": TrackingConfig,
+    "video": VideoConfig,
+    "visualization": VisualizationConfig,
+    "output": OutputConfig,
+}
 _T = TypeVar("_T")
-_TRUE = {"1", "true", "yes", "on"}
-_FALSE = {"0", "false", "no", "off"}
 
 
 def load_config(
-    path: str | Path | None = None,
-    overrides: Mapping[str, Any] | None = None,
-    env: Mapping[str, str] | None = None,
+    path: str | Path | None = None, overrides: Mapping[str, Mapping[str, Any]] | None = None
 ) -> AppConfig:
-    """Build an :class:`AppConfig` from defaults, a YAML file, env vars and overrides.
+    """Build the configuration from defaults, an optional YAML file and overrides.
 
-    Args:
-        path: Optional YAML file.
-        overrides: Nested mapping (``{"model": {"confidence": 0.4}}``) applied last.
-            ``None`` values are ignored so that unset CLI flags do not override anything.
-        env: Environment mapping; defaults to :data:`os.environ`.
+    ``overrides`` is a nested mapping such as ``{"model": {"confidence": 0.4}}``;
+    ``None`` values are ignored so unset CLI flags keep the file or default value.
     """
-    data: dict[str, Any] = {}
-    if path is not None:
-        _deep_merge(data, _read_yaml(Path(path)))
-    _deep_merge(data, _env_overrides(os.environ if env is None else env))
-    if overrides:
-        _deep_merge(data, _drop_none(overrides))
-    return _build(AppConfig, data, "")
+    data = _read_yaml(Path(path)) if path is not None else {}
+    for section, values in (overrides or {}).items():
+        given = {key: value for key, value in values.items() if value is not None}
+        if given:
+            current = data.get(section)
+            data[section] = {**current, **given} if isinstance(current, Mapping) else given
+
+    unknown = sorted(set(data) - set(_SECTIONS))
+    if unknown:
+        raise ConfigError(f"Unknown config section(s): {', '.join(unknown)}")
+    return AppConfig(
+        **{name: _build(cls, name, data.get(name, {})) for name, cls in _SECTIONS.items()}
+    )
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:
@@ -207,110 +194,13 @@ def _read_yaml(path: Path) -> dict[str, Any]:
     return content
 
 
-def _env_overrides(env: Mapping[str, str]) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for name, value in env.items():
-        if not name.startswith(ENV_PREFIX):
-            continue
-        parts = name[len(ENV_PREFIX) :].lower().split(ENV_SECTION_SEPARATOR)
-        if len(parts) != 2 or not all(parts):
-            raise ConfigError(
-                f"Environment variable {name} must look like "
-                f"{ENV_PREFIX}<SECTION>{ENV_SECTION_SEPARATOR}<KEY>"
-            )
-        section, key = parts
-        result.setdefault(section, {})[key] = value
-    return result
-
-
-def _deep_merge(target: dict[str, Any], source: Mapping[str, Any]) -> None:
-    for key, value in source.items():
-        if isinstance(value, Mapping) and isinstance(target.get(key), dict):
-            _deep_merge(target[key], value)
-        elif isinstance(value, Mapping):
-            target[key] = dict(value)
-        else:
-            target[key] = value
-
-
-def _drop_none(mapping: Mapping[str, Any]) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for key, value in mapping.items():
-        if isinstance(value, Mapping):
-            result[key] = _drop_none(value)
-        elif value is not None:
-            result[key] = value
-    return result
-
-
-def _build(cls: type[_T], data: Mapping[str, Any], prefix: str) -> _T:
-    if not isinstance(data, Mapping):
-        raise ConfigError(f"Section '{prefix.rstrip('.') or 'root'}' must be a mapping")
-    hints = typing.get_type_hints(cls)
-    known = {f.name for f in dataclasses.fields(cls)}  # type: ignore[arg-type]
-    unknown = sorted(set(data) - known)
+def _build(cls: type[_T], name: str, values: Any) -> _T:
+    if not isinstance(values, Mapping):
+        raise ConfigError(f"Config section '{name}' must be a mapping")
+    unknown = sorted(set(values) - {f.name for f in dataclasses.fields(cls)})  # type: ignore[arg-type]
     if unknown:
-        where = prefix.rstrip(".") or "root"
-        raise ConfigError(f"Unknown config key(s) in '{where}': {', '.join(unknown)}")
-
-    kwargs: dict[str, Any] = {}
-    for name, value in data.items():
-        hint = hints[name]
-        qualified = f"{prefix}{name}"
-        if dataclasses.is_dataclass(hint):
-            kwargs[name] = _build(hint, value, f"{qualified}.")  # type: ignore[arg-type]
-        else:
-            kwargs[name] = _coerce(value, hint, qualified)
-    return cls(**kwargs)
-
-
-def _coerce(value: Any, hint: Any, name: str) -> Any:
-    """Convert ``value`` (possibly a string from the environment) to type ``hint``."""
-    origin = typing.get_origin(hint)
-    args = typing.get_args(hint)
-
-    if origin in (typing.Union, types.UnionType):
-        is_null = value is None or (
-            isinstance(value, str) and value.strip().lower() in {"", "none", "null"}
-        )
-        if is_null and type(None) in args:
-            return None
-        inner = [a for a in args if a is not type(None)]
-        return _coerce(value, inner[0], name)
-
-    if origin is tuple:
-        if isinstance(value, str):
-            items = [item.strip() for item in value.split(",") if item.strip()]
-        elif isinstance(value, (list, tuple)):
-            items = list(value)
-        else:
-            raise ConfigError(f"{name} must be a list, got {value!r}")
-        return tuple(_coerce(item, args[0], name) for item in items)
-
+        raise ConfigError(f"Unknown config key(s) in '{name}': {', '.join(unknown)}")
     try:
-        if hint is bool:
-            if isinstance(value, bool):
-                return value
-            text = str(value).strip().lower()
-            if text in _TRUE:
-                return True
-            if text in _FALSE:
-                return False
-            raise ValueError(value)
-        if hint is int:
-            if isinstance(value, bool) or (isinstance(value, float) and not value.is_integer()):
-                raise ValueError(value)
-            return int(value)
-        if hint is float:
-            if isinstance(value, bool):
-                raise ValueError(value)
-            return float(value)
-        if hint is str:
-            if not isinstance(value, (str, int, float)):
-                raise ValueError(value)
-            return str(value)
-    except (TypeError, ValueError):
-        raise ConfigError(
-            f"Invalid value for {name}: expected {hint.__name__}, got {value!r}"
-        ) from None
-    raise ConfigError(f"Unsupported config type for {name}: {hint}")  # pragma: no cover
+        return cls(**values)
+    except TypeError as exc:
+        raise ConfigError(f"Invalid value in '{name}': {exc}") from None

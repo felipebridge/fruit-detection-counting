@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -22,9 +21,6 @@ def fake_detector(monkeypatch: pytest.MonkeyPatch) -> list[ModelConfig]:
         return ScriptedDetector([[make_detection(10, 10, 100, 100, 0.9, "orange")]])
 
     monkeypatch.setattr(cli, "build_detector", factory)
-    for name in list(os.environ):
-        if name.startswith("FRUIT_COUNTER_"):
-            monkeypatch.delenv(name)
     return seen
 
 
