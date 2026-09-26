@@ -23,7 +23,7 @@ from typing import Any
 
 from fruit_counter import __version__
 from fruit_counter.config import AppConfig, ModelConfig, load_config
-from fruit_counter.detector import Detector, YoloDetector
+from fruit_counter.detector import YoloDetector
 from fruit_counter.exceptions import ConfigError, FruitCounterError, InputError
 from fruit_counter.logging_utils import configure_logging
 from fruit_counter.runner import FruitCountingRunner, RunReport
@@ -117,7 +117,7 @@ def overrides_from_args(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def build_detector(config: ModelConfig) -> Detector:
+def build_detector(config: ModelConfig) -> YoloDetector:
     """Factory for the detector used by the CLI (a seam for tests and new backends)."""
     return YoloDetector(config)
 
