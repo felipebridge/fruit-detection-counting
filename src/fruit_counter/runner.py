@@ -125,6 +125,8 @@ class FruitCountingRunner:
                 result.inference_ms,
             )
 
+        if not entries:
+            raise InputError(f"No readable images in {source}")
         if source.kind is SourceKind.IMAGE:
             return entries[0], files
         # Images are independent, so the total is the sum of per-image counts.

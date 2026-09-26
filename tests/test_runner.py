@@ -84,6 +84,16 @@ def test_image_directory_aggregates_and_skips_broken_files(tmp_path: Path) -> No
     }
 
 
+def test_directory_without_readable_images_fails(tmp_path: Path) -> None:
+    images = tmp_path / "images"
+    images.mkdir()
+    (images / "broken.jpg").write_bytes(b"corrupt")
+    runner = FruitCountingRunner(make_config(tmp_path), ScriptedDetector([]))
+    with pytest.raises(InputError, match="No readable images"):
+        runner.run(resolve_source(images))
+    assert list((tmp_path / "outputs").iterdir()) == []
+
+
 def test_failed_runs_leave_no_empty_output_directory(tmp_path: Path) -> None:
     broken_image = tmp_path / "broken.jpg"
     broken_image.write_bytes(b"corrupt")
