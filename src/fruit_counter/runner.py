@@ -111,12 +111,20 @@ class FruitCountingRunner:
         """
         output_dir = create_run_dir(self._config.output.directory, source.name, run_name)
         logger.info("Processing %s '%s'", source.kind.value, source)
-        if source.is_stream:
-            report = self._run_stream(source, output_dir, show)
-        else:
-            assert source.path is not None
-            paths = [source.path] if source.kind is SourceKind.IMAGE else list_images(source.path)
-            report = self._run_images(source, paths, output_dir)
+        try:
+            if source.is_stream:
+                report = self._run_stream(source, output_dir, show)
+            else:
+                assert source.path is not None
+                paths = (
+                    [source.path] if source.kind is SourceKind.IMAGE else list_images(source.path)
+                )
+                report = self._run_images(source, paths, output_dir)
+        except BaseException:
+            # Don't leave empty run directories behind (e.g. camera could not be opened).
+            if not any(output_dir.iterdir()):
+                output_dir.rmdir()
+            raise
         logger.info("Results written to %s", output_dir)
         return report
 

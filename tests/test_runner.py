@@ -85,12 +85,17 @@ def test_image_directory_aggregates_and_skips_broken_files(tmp_path: Path) -> No
     }
 
 
-def test_corrupt_single_image_fails(tmp_path: Path) -> None:
-    broken = tmp_path / "broken.jpg"
-    broken.write_bytes(b"corrupt")
+def test_failed_runs_leave_no_empty_output_directory(tmp_path: Path) -> None:
+    broken_image = tmp_path / "broken.jpg"
+    broken_image.write_bytes(b"corrupt")
+    broken_video = tmp_path / "broken.mp4"
+    broken_video.write_bytes(b"corrupt")
     runner = FruitCountingRunner(make_config(tmp_path), ScriptedDetector([]))
-    with pytest.raises(InputError):
-        runner.run(resolve_source(broken))
+
+    for source in (broken_image, broken_video):
+        with pytest.raises(InputError):
+            runner.run(resolve_source(source), run_name="failed")
+        assert not (tmp_path / "outputs" / "failed").exists()
 
 
 def test_video_run_counts_unique_fruits_and_writes_all_outputs(tmp_path: Path) -> None:
