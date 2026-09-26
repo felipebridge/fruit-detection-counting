@@ -29,6 +29,7 @@ jobs:
 
       - name: Install
         run: |
+          sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends ffmpeg
           python -m pip install --upgrade pip
           pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
           pip install -e ".[dev]"
