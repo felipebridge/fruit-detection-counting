@@ -190,9 +190,6 @@ fruit-counter --input 0 --show
 fruit-counter -i orchard.mp4 --conf 0.3 --device cuda:0 --imgsz 1280 --stride 2
 fruit-counter -i orchard.mp4 --min-hits 5 --max-age 60
 
-# Machine-readable output for scripts
-fruit-counter -i data/samples/fruit_bowl.jpg --json
-
 # Inspect which classes a model predicts
 fruit-counter --list-classes --weights models/yolo11n.pt
 ```
@@ -219,7 +216,6 @@ Outputs: outputs/fruit_bowl_pan_20260925-210557
 | `-i, --input` | Image, image directory, video file, or camera index (`0`) |
 | `-c, --config` | YAML configuration file |
 | `-o, --output-dir` | Root directory for run outputs (default `outputs`) |
-| `--run-name` | Fixed run directory name (default `<input>_<timestamp>`) |
 | `-w, --weights` | YOLO weights path |
 | `--device` | `auto` (default), `cpu`, `cuda:0`, `mps` |
 | `--conf`, `--iou`, `--imgsz` | Confidence threshold, NMS IoU, inference size |
@@ -228,9 +224,8 @@ Outputs: outputs/fruit_bowl_pan_20260925-210557
 | `--min-hits`, `--max-age` | Track confirmation and occlusion tolerance |
 | `--show` | Live preview window |
 | `--no-save-annotated` | Skip annotated images / video |
-| `--json` | Print results as JSON on stdout (logs go to stderr) |
 | `--list-classes` | Print the model's classes and exit |
-| `--log-level` | `DEBUG`, `INFO` (default), `WARNING`, `ERROR` |
+| `-q, --quiet` | Only log warnings and errors |
 
 Exit codes: `0` success, `1` runtime failure (model or output), `2` invalid input or
 configuration, `130` interrupted.

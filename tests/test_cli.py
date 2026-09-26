@@ -20,12 +20,12 @@ def fake_detector(monkeypatch: pytest.MonkeyPatch) -> list[ModelConfig]:
         seen.append(config)
         return ScriptedDetector([[make_detection(10, 10, 100, 100, 0.9, "orange")]])
 
-    monkeypatch.setattr(cli, "build_detector", factory)
+    monkeypatch.setattr(cli, "YoloDetector", factory)
     return seen
 
 
 def run_cli(args: list[str], tmp_path: Path) -> int:
-    return cli.main([*args, "--output-dir", str(tmp_path / "out"), "--log-level", "ERROR"])
+    return cli.main([*args, "--output-dir", str(tmp_path / "out"), "--quiet"])
 
 
 def test_image_run_prints_human_summary(
@@ -37,18 +37,8 @@ def test_image_run_prints_human_summary(
     assert "Fruits detected: 1" in out
     assert "orange: 1" in out
     (run_dir,) = (tmp_path / "out").iterdir()
-    assert (run_dir / "summary.json").is_file()
-
-
-def test_json_output_is_machine_readable(
-    fake_detector: list[ModelConfig], tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    code = run_cli(["-i", str(SAMPLE_IMAGE), "--json"], tmp_path)
-    data = json.loads(capsys.readouterr().out)
-    assert code == cli.EXIT_OK
-    assert data["kind"] == "image"
-    assert data["results"]["fruit_count"] == 1
-    assert Path(data["files"]["summary"]).is_file()
+    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["results"]["fruit_count"] == 1
 
 
 def test_flags_override_config_file(fake_detector: list[ModelConfig], tmp_path: Path) -> None:
@@ -100,8 +90,8 @@ def test_model_errors_exit_with_failure_code(
     def broken(config: ModelConfig) -> None:
         raise ModelError("Could not load model weights 'x.pt'")
 
-    monkeypatch.setattr(cli, "build_detector", broken)
-    assert run_cli(["-i", str(SAMPLE_IMAGE), "--log-level", "ERROR"], tmp_path) == 1
+    monkeypatch.setattr(cli, "YoloDetector", broken)
+    assert run_cli(["-i", str(SAMPLE_IMAGE)], tmp_path) == cli.EXIT_FAILURE
     assert "Could not load" in capsys.readouterr().err
 
 
