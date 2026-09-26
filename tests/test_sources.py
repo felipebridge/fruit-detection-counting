@@ -9,8 +9,9 @@ from fruit_counter.exceptions import InputError
 from fruit_counter.sources import (
     InputSource,
     SourceKind,
-    VideoStream,
     list_images,
+    open_video,
+    read_frames,
     read_image,
     resolve_source,
 )
@@ -102,33 +103,26 @@ def test_read_image_rejects_corrupt_files(tmp_path: Path) -> None:
 # ------------------------------------------------------------------ video reading
 
 
-def test_video_stream_reads_all_frames_with_timestamps(tmp_path: Path) -> None:
-    source = resolve_source(write_video(tmp_path / "v.avi", frames=12, fps=10))
-    with VideoStream(source) as stream:
-        assert stream.fps == pytest.approx(10)
-        assert (stream.width, stream.height) == (64, 48)
-        assert stream.frame_count == 12
-        frames = list(stream.frames())
-    assert [f.index for f in frames] == list(range(12))
-    assert frames[5].timestamp_s == pytest.approx(0.5)
-    assert frames[0].image.shape == (48, 64, 3)
+def test_read_frames_yields_all_frames_with_timestamps(tmp_path: Path) -> None:
+    capture, fps = open_video(resolve_source(write_video(tmp_path / "v.avi", frames=12, fps=10)))
+    frames = list(read_frames(capture, fps))
+    capture.release()
+    assert fps == pytest.approx(10)
+    assert [index for index, _, _ in frames] == list(range(12))
+    assert frames[5][1] == pytest.approx(0.5)
+    assert frames[0][2].shape == (48, 64, 3)
 
 
-def test_video_stream_stride_and_max_frames(tmp_path: Path) -> None:
+def test_read_frames_stride_and_max_frames(tmp_path: Path) -> None:
     source = resolve_source(write_video(tmp_path / "v.avi", frames=12))
-    with VideoStream(source) as stream:
-        assert [f.index for f in stream.frames(stride=3)] == [0, 3, 6, 9]
-    with VideoStream(source) as stream:
-        assert [f.index for f in stream.frames(stride=2, max_frames=2)] == [0, 2]
+    for stride, max_frames, expected in [(3, None, [0, 3, 6, 9]), (2, 2, [0, 2])]:
+        capture, fps = open_video(source)
+        assert [i for i, _, _ in read_frames(capture, fps, stride, max_frames)] == expected
+        capture.release()
 
 
 def test_unreadable_video_raises_input_error(tmp_path: Path) -> None:
     fake = tmp_path / "fake.mp4"
     fake.write_bytes(b"garbage")
     with pytest.raises(InputError, match="Cannot open"):
-        VideoStream(resolve_source(fake))
-
-
-def test_video_stream_rejects_image_sources() -> None:
-    with pytest.raises(InputError, match="not a video"):
-        VideoStream(resolve_source(SAMPLE_IMAGE))
+        open_video(resolve_source(fake))

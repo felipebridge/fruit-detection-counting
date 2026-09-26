@@ -30,7 +30,14 @@ from fruit_counter.outputs import (
     write_json,
 )
 from fruit_counter.pipeline import FrameResult, ImagePipeline, VideoPipeline
-from fruit_counter.sources import InputSource, SourceKind, VideoStream, list_images, read_image
+from fruit_counter.sources import (
+    InputSource,
+    SourceKind,
+    list_images,
+    open_video,
+    read_frames,
+    read_image,
+)
 from fruit_counter.visualization import Annotator
 
 logger = logging.getLogger(__name__)
@@ -189,31 +196,34 @@ class FruitCountingRunner:
         started = time.perf_counter()
 
         with ExitStack() as stack:
-            stream = stack.enter_context(VideoStream(source))
+            capture, source_fps = open_video(source)
+            stack.callback(capture.release)
             video_writer = stack.enter_context(
                 VideoFileWriter(
                     output_dir / f"{source.name}_annotated.mp4",
-                    stream.fps / cfg.video.frame_stride,
+                    source_fps / cfg.video.frame_stride,
                 )
             )
             csv_writer = stack.enter_context(CsvStreamWriter(output_dir / FRAMES_FILE))
             if preview is not None:
                 stack.callback(preview.close)
 
-            expected = self._expected_frames(stream.frame_count)
-            logger.info(
-                "Stream: %dx%d @ %.2f fps, %s frame(s) to process",
-                stream.width,
-                stream.height,
-                stream.fps,
-                expected if expected is not None else "unknown number of",
+            frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+            expected = self._expected_frames(frame_count if frame_count > 0 else None)
+            logger.info("Stream @ %.2f fps, %s frame(s) to process", source_fps, expected or "?")
+            frames = read_frames(
+                capture,
+                source_fps,
+                cfg.video.frame_stride,
+                cfg.video.max_frames,
+                wall_clock=source.kind is SourceKind.CAMERA,
             )
             try:
-                for frame in stream.frames(cfg.video.frame_stride, cfg.video.max_frames):
-                    result = pipeline.process_frame(frame.image, frame.index, frame.timestamp_s)
+                for index, timestamp, image in frames:
+                    result = pipeline.process_frame(image, index, timestamp)
                     csv_writer.write(result.to_row())
                     if cfg.output.save_annotated or preview is not None:
-                        annotated = pipeline.annotate(frame.image, result)
+                        annotated = pipeline.annotate(image, result)
                         if cfg.output.save_annotated:
                             video_writer.write(annotated)
                         if preview is not None:
@@ -226,7 +236,6 @@ class FruitCountingRunner:
             except KeyboardInterrupt:
                 logger.warning("Interrupted; saving partial results")
                 interrupted = True
-            source_fps = stream.fps
 
         summary = pipeline.summary()
         if summary["frames_processed"] == 0:
