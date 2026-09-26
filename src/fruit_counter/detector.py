@@ -37,10 +37,10 @@ class Detector(Protocol):
 
 class YoloDetector:
     def __init__(self, config: ModelConfig, model: Any | None = None) -> None:
+        device = resolve_device(config.device)
         self._model = model if model is not None else load_yolo_model(config.weights)
         self.class_names = {int(k): str(v) for k, v in dict(self._model.names).items()}
         class_ids = resolve_class_ids(self.class_names, config.classes)
-        device = resolve_device(config.device)
         self._predict_args: dict[str, Any] = {
             "conf": config.confidence,
             "iou": config.iou,
@@ -99,15 +99,15 @@ def resolve_class_ids(class_names: Mapping[int, str], wanted: Iterable[str]) -> 
 
 
 def resolve_device(device: str) -> str:
-    if device != "auto":
-        return device
+    """Pick the best device for ``"auto"``; reject a GPU device that isn't available."""
     import torch
 
-    if torch.cuda.is_available():
-        return "cuda:0"
-    if torch.backends.mps.is_available():
-        return "mps"
-    return "cpu"
+    cuda, mps = torch.cuda.is_available(), torch.backends.mps.is_available()
+    if device == "auto":
+        return "cuda:0" if cuda else "mps" if mps else "cpu"
+    if (device.startswith("cuda") and not cuda) or (device == "mps" and not mps):
+        raise ConfigError(f"Device '{device}' is not available; use 'cpu' or 'auto'")
+    return device
 
 
 def boxes_to_detections(boxes: Any, class_names: Mapping[int, str]) -> list[Detection]:

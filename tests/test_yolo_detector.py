@@ -22,6 +22,7 @@ from fruit_counter.detector import (
     YoloDetector,
     boxes_to_detections,
     resolve_class_ids,
+    resolve_device,
 )
 from fruit_counter.exceptions import ConfigError, ModelError
 
@@ -121,6 +122,20 @@ def test_class_names_are_case_insensitive() -> None:
 def test_unknown_class_is_a_config_error() -> None:
     with pytest.raises(ConfigError, match="mango"):
         YoloDetector(ModelConfig(device="cpu", classes=("mango",)), model=FakeYolo())
+
+
+def test_unavailable_gpu_device_is_a_config_error() -> None:
+    torch = pytest.importorskip("torch")
+    if torch.cuda.is_available():
+        pytest.skip("CUDA is available on this machine")
+    with pytest.raises(ConfigError, match="not available"):
+        YoloDetector(ModelConfig(device="cuda:0"), model=FakeYolo())
+
+
+def test_auto_device_resolves_to_an_available_device() -> None:
+    pytest.importorskip("torch")
+    assert resolve_device("auto") in {"cuda:0", "mps", "cpu"}
+    assert resolve_device("cpu") == "cpu"
 
 
 def test_inference_errors_are_wrapped() -> None:
