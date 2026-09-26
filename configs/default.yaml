@@ -24,6 +24,7 @@ tracking:
   # Consecutive matched frames before a fruit is counted.
   min_hits: 3
   # Frames a counted fruit may go undetected before its track is dropped.
+  # Both values count processed frames, so they scale with frame_stride.
   max_age: 30
 
 video:

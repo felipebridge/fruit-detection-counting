@@ -102,6 +102,9 @@ per-frame total (657 on the demo clip). It is there for comparison and is not a 
 NMS runs across classes, so one fruit can't produce both an "apple" and an "orange"
 box and be counted twice.
 
+`min_hits` and `max_age` count processed frames, so with `--stride 2` the default
+`max_age` of 30 covers 60 frames of the source video.
+
 ## Configuration
 
 Defaults can be overridden with a YAML file (`-c`), and CLI flags override both.
@@ -113,6 +116,26 @@ Defaults can be overridden with a YAML file (`-c`), and CLI flags override both.
 | `tracking` | `high_threshold`, `match_iou`, `min_hits`, `max_age` |
 | `video` | `frame_stride`, `max_frames` |
 | `output` | `directory`, `save_annotated` |
+
+## Speed
+
+Almost all of the time goes to the network. On a laptop CPU, YOLO11n takes about
+56 ms per 800x450 frame, and the rest of the pipeline adds about 4 ms (decoding,
+tracking, drawing and encoding). To go faster, use a GPU (`--device cuda:0`, and
+`half: true` in the config), process fewer frames (`--stride`), use a smaller
+`--imgsz`, or skip the annotated output (`--no-save-annotated`).
+
+## Code layout
+
+| Module | Role |
+|---|---|
+| `detector.py` | YOLO inference, class filter, conversion to `Detection` |
+| `tracker.py` | IoU tracker with motion prediction |
+| `counting.py` | Per-image counts and unique counting from track ids |
+| `pipeline.py` | In-memory image and video pipelines |
+| `runner.py` | Reads the input, runs a pipeline and writes the outputs |
+| `evaluation.py` | Counting error against ground truth |
+| `sources.py`, `visualization.py`, `config.py`, `cli.py` | Input, drawing, settings, CLI |
 
 ## Python API
 
