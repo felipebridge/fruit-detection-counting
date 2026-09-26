@@ -57,6 +57,10 @@ class ModelConfig:
     # Class names to keep. An empty tuple keeps every class the model predicts,
     # which is the right choice for a custom, fruit-only model.
     classes: tuple[str, ...] = COCO_FRUIT_CLASSES
+    # Suppress overlapping boxes across classes. Essential for counting: with per-class
+    # NMS an ambiguous fruit can yield both an "apple" and an "orange" box, which
+    # would be counted as two objects.
+    agnostic_nms: bool = True
     half: bool = False
 
     def __post_init__(self) -> None:

@@ -18,6 +18,9 @@ model:
   # Class names to keep. COCO only has these three fruit classes.
   # Use an empty list ([]) to keep every class of a custom fruit-only model.
   classes: [apple, banana, orange]
+  # Run NMS across classes so one fruit never yields two boxes with different labels
+  # (e.g. "apple" and "orange"), which would be counted twice.
+  agnostic_nms: true
   half: false
 
 tracking:

@@ -59,6 +59,7 @@ class YoloDetector:
             "iou": self._config.iou,
             "imgsz": self._config.image_size,
             "classes": self._class_ids,
+            "agnostic_nms": self._config.agnostic_nms,
             "device": self._device,
             "verbose": False,
         }
