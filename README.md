@@ -119,9 +119,10 @@ Defaults can be overridden with a YAML file (`-c`), and CLI flags override both.
 
 ## Speed
 
-Almost all of the time goes to the network. On a laptop CPU, YOLO11n takes about
-56 ms per 800x450 frame, and the rest of the pipeline adds about 4 ms (decoding,
-tracking, drawing and encoding). To go faster, use a GPU (`--device cuda:0`, and
+Almost all of the time goes to the network. On a laptop CPU, YOLO11n inference
+averages about 70 ms per 800x450 frame on the demo clip (`mean_inference_ms` in
+`summary.json`). Everything else (decoding, tracking, drawing and encoding) adds
+about 4 ms per frame. To go faster, use a GPU (`--device cuda:0`, and
 `half: true` in the config), process fewer frames (`--stride`), use a smaller
 `--imgsz`, or skip the annotated output (`--no-save-annotated`).
 
