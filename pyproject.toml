@@ -7,11 +7,16 @@ name = "fruit-detection-counting"
 dynamic = ["version"]
 description = "Fruit detection and counting in images and videos with YOLO."
 readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.10"
 authors = [{ name = "felipebridge" }]
 keywords = ["computer-vision", "object-detection", "yolo", "fruit-counting"]
 classifiers = [
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Image Recognition",
 ]
 dependencies = [
@@ -35,6 +40,7 @@ fruit-counter = "fruit_counter.cli:main"
 
 [project.urls]
 Repository = "https://github.com/felipebridge/fruit-detection-counting"
+Issues = "https://github.com/felipebridge/fruit-detection-counting/issues"
 
 [tool.setuptools.dynamic]
 version = { attr = "fruit_counter.__version__" }
