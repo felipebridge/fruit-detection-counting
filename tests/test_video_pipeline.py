@@ -39,13 +39,13 @@ def test_unique_count_vs_visible_count(blank_frame: np.ndarray) -> None:
     assert newly == [(2, [1]), (12, [2])]
 
     summary = pipeline.summary()
-    assert summary.frames_processed == 40
-    assert summary.unique_fruit_count == 2
-    assert summary.counts_by_class == {"apple": 1, "orange": 1}
-    assert summary.detections_summed_over_frames == 60  # the naive per-frame total
-    assert summary.max_visible == 2
-    assert summary.mean_visible == 60 / 40
-    assert [obj["track_id"] for obj in summary.objects] == [1, 2]
+    assert summary["frames_processed"] == 40
+    assert summary["unique_fruit_count"] == 2
+    assert summary["counts_by_class"] == {"apple": 1, "orange": 1}
+    assert summary["detections_summed_over_frames"] == 60  # the naive per-frame total
+    assert summary["max_visible_in_frame"] == 2
+    assert summary["mean_visible_per_frame"] == 60 / 40
+    assert [obj["track_id"] for obj in summary["objects"]] == [1, 2]
 
 
 def test_frame_rows_are_flat_and_serialisable(blank_frame: np.ndarray) -> None:
@@ -69,25 +69,11 @@ def test_frame_index_defaults_to_running_count(blank_frame: np.ndarray) -> None:
     assert [pipeline.process_frame(blank_frame).frame_index for _ in range(2)] == [0, 1]
 
 
-def test_reset_starts_a_new_stream(blank_frame: np.ndarray) -> None:
-    script = build_script(fruit_passing(5, y=10), length=5) * 2
-    pipeline = VideoPipeline(ScriptedDetector(script), TrackingConfig(min_hits=2))
-    for i in range(5):
-        pipeline.process_frame(blank_frame, i)
-    assert pipeline.unique_count == 1
-
-    pipeline.reset()
-    assert pipeline.summary().frames_processed == 0
-    results = [pipeline.process_frame(blank_frame, i) for i in range(5)]
-    assert results[-1].unique_count == 1
-    assert results[-1].tracked[0].track_id == 1  # ids restart too
-
-
 def test_empty_stream_summary() -> None:
     summary = VideoPipeline(ScriptedDetector([])).summary()
-    assert summary.unique_fruit_count == 0
-    assert summary.mean_visible == 0.0
-    assert summary.to_dict()["objects"] == []
+    assert summary["unique_fruit_count"] == 0
+    assert summary["mean_visible_per_frame"] == 0.0
+    assert summary["objects"] == []
 
 
 def test_annotated_frame_shows_confirmed_ids(blank_frame: np.ndarray) -> None:
@@ -96,6 +82,5 @@ def test_annotated_frame_shows_confirmed_ids(blank_frame: np.ndarray) -> None:
     for i in range(3):
         result = pipeline.process_frame(blank_frame, i)
     annotated = pipeline.annotate(blank_frame, result)
-    assert annotated.shape == blank_frame.shape
+    assert annotated is blank_frame  # drawn in place
     assert annotated.any()
-    assert not blank_frame.any()

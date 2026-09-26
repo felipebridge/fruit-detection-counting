@@ -229,7 +229,7 @@ class FruitCountingRunner:
             source_fps = stream.fps
 
         summary = pipeline.summary()
-        if summary.frames_processed == 0:
+        if summary["frames_processed"] == 0:
             raise InputError(f"No frames could be read from {source}")
         elapsed = time.perf_counter() - started
         files: dict[str, Path] = {}
@@ -238,19 +238,19 @@ class FruitCountingRunner:
         if csv_writer.rows_written:
             files["frame_stats"] = csv_writer.path
         results = {
-            **summary.to_dict(),
+            **summary,
             "source_fps": round(source_fps, 3),
             "frame_stride": cfg.video.frame_stride,
             "processing_time_s": round(elapsed, 2),
-            "processing_fps": round(summary.frames_processed / elapsed, 2),
+            "processing_fps": round(summary["frames_processed"] / elapsed, 2),
             "interrupted": interrupted,
         }
         files["summary"] = write_json(output_dir / SUMMARY_FILE, self._envelope(source, results))
         logger.info(
             "Done: %d frame(s), %d unique fruit(s) %s",
-            summary.frames_processed,
-            summary.unique_fruit_count,
-            summary.counts_by_class,
+            summary["frames_processed"],
+            summary["unique_fruit_count"],
+            summary["counts_by_class"],
         )
         return RunReport(source, output_dir, results, files)
 

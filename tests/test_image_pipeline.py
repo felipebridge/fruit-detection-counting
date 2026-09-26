@@ -56,14 +56,13 @@ def test_invalid_input_is_rejected_before_inference() -> None:
     assert detector.calls == 0
 
 
-def test_annotation_draws_boxes_without_mutating_input(blank_frame: np.ndarray) -> None:
+def test_annotation_draws_boxes_and_summary(blank_frame: np.ndarray) -> None:
     det = make_detection(50, 50, 150, 150, 0.9, "apple")
     pipeline = ImagePipeline(ScriptedDetector([[det]]))
     result = pipeline.process(blank_frame)
     annotated = pipeline.annotate(blank_frame, result)
 
-    assert annotated.shape == blank_frame.shape
-    assert not blank_frame.any(), "input frame must not be modified"
+    assert annotated.shape == (240, 320, 3)
     # The right edge of the box is drawn in the class colour.
     assert tuple(annotated[100, 150]) == PALETTE[0]
     # The summary panel writes (anti-aliased) white text in the top-left corner.

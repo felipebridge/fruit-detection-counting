@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from fruit_counter.exceptions import InputError
-from fruit_counter.preprocessing import ensure_bgr
+from fruit_counter.pipeline import ensure_bgr
 
 
 def test_bgr_frame_passes_through_unchanged() -> None:
