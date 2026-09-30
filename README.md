@@ -2,9 +2,9 @@
 
 # Fruit Detection & Counting
 
-**Point a camera at fruit. Get a count where each fruit counts exactly once.**
+**Real-time fruit detection, tracking and counting from images, video and live camera feeds.**
 
-<img src="docs/assets/blueberries_counted.gif" width="720" alt="Blueberries on a conveyor belt, each one tracked and counted once">
+<img src="docs/assets/blueberries_counted.gif" width="720" alt="Fruit on a conveyor belt, detected, tracked and counted in real time">
 
 [![CI](https://github.com/felipebridge/fruit-detection-counting/actions/workflows/ci.yml/badge.svg)](https://github.com/felipebridge/fruit-detection-counting/actions/workflows/ci.yml)
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)
@@ -13,7 +13,7 @@
 
 </div>
 
-YOLO11 detection plus tracking, so the total is the number of fruit, not the number of detections.
+Combines YOLO11 detection with multi-object tracking so each fruit is counted exactly once, reporting unique fruit rather than per-frame detections.
 
 ## Quick Start
 
